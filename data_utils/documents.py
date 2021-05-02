@@ -14,8 +14,8 @@ from utils.entities_list import Entities_list
 from utils.class_utils import keys_vocab_cls, iob_labels_vocab_cls, entities_vocab_cls
 
 MAX_BOXES_NUM = 70  # limit max number boxes of every documents
-MAX_TRANSCRIPT_LEN = 50  # limit max length text of every box
-
+MAX_TRANSCRIPT_LEN_GLOBAL = 64  # limit max length text of every box
+MAX_WIDTH = 1024
 # text string label converter
 TextSegmentsField = Field(sequential=True, use_vocab=True, include_lengths=True, batch_first=True)
 TextSegmentsField.vocab = keys_vocab_cls
@@ -30,7 +30,7 @@ class Document:
                  image_file: Path,
                  #resized_image_size: Tuple[int, int] = (480, 960),
                  segment_height: int = 64,
-                 segment_max_width: int = 512,
+                 segment_max_width: int = 1024,
                  iob_tagging_type: str = 'box_level',
                  entities_file: Path = None,
                  training: bool = True,
@@ -49,7 +49,7 @@ class Document:
         segment_height : int, optional
             Height of resized image segments, by default 64
         segment_max_width : int , optional
-            Maximum width of image segments, by default 512
+            Maximum width of image segments, by default 1024
         iob_tagging_type : str, optional
             'box_level', 'document_level', 'box_and_within_box_level', by default 'box_level'
         entities_file : Path, optional
@@ -107,13 +107,12 @@ class Document:
 
         # Limit the number of boxes and number of transcripts to process.
         boxes_num = min(len(boxes), MAX_BOXES_NUM)
-        transcript_len = min(max([len(t) for t in transcripts[:boxes_num]]), MAX_TRANSCRIPT_LEN)
+        transcript_len = min(max([len(t) for t in transcripts[:boxes_num]]), MAX_TRANSCRIPT_LEN_GLOBAL)
         mask = np.zeros((boxes_num, transcript_len), dtype=int)
 
         relation_features = np.zeros((boxes_num, boxes_num, 6))
 
         try:
-            image_segments = crop_image_segments(image,boxes,boxes_num,self.segment_height,self.segment_max_width)
             height, width, _ = image.shape
 
             # resize image
@@ -147,6 +146,8 @@ class Document:
             relation_features = normalize_relation_features(relation_features, width=width, height=height)
             # The length of texts of each segment.
             text_segments = [list(trans) for trans in transcripts[:boxes_num]]
+            image_segments,segment_width = crop_image_segments(image,boxes,boxes_num,self.segment_height,self.segment_max_width,text_segments,transcript_len,MAX_TRANSCRIPT_LEN_GLOBAL)
+            self.segment_width = segment_width
 
             if self.training:
                 # assign iob label to input text through exactly match way, this process needs entity-level label
@@ -181,7 +182,7 @@ class Document:
             for i in range(boxes_num):
                 mask[i, :texts_len[i]] = 1
 
-            self.whole_image = RawField().preprocess(image)
+            #self.whole_image = RawField().preprocess(image)
             self.image_segments = RawField.preprocess(image_segments)
             self.text_segments = TextSegmentsField.preprocess(text_segments)  # (text, texts_len)
             self.boxes_coordinate = RawField().preprocess(resized_boxes)
@@ -457,9 +458,10 @@ def preprocess_transcripts(transcripts: List[str]):
             idx.append(index)
     return seq, idx
 
-def crop_image_segments(image,boxes,boxes_num,height,max_width)->list:
+def crop_image_segments(image,boxes,boxes_num,height,max_width,text_lengths,max_transcript_length,max_transcript_length_global)->list:
     """ 
-    Crop all image segments in provied image according the boxes coordinates and resize and padding image segments
+    Crop all image segments in provied image according the boxes coordinates 
+    then resize and padding image segments under text length constrain
 
     Parameters
     ----------
@@ -469,24 +471,35 @@ def crop_image_segments(image,boxes,boxes_num,height,max_width)->list:
         boxes coordinates format (x1,y1,x2,y2,x3,y3,x4,y4)
     boxes_num : int
         number of boxes
-
+    height : int
+        height of resized image
+    max_width : int
+        max_width of resized image
+    text_lengths list[int]
+        lengths of text segments
+    max_transcript_length : int
+        max length of text segments in image
+    max_transcript_length_global : int
+        max length of text segment in all images
     Return
     ------
     List of image segments
     """
     segments = []
+    padding_width = max_width * max_transcript_length / max_transcript_length_global
+    scale = max_width / max_transcript_length_global
     for i in range(0,boxes_num):
         segment = crop_rotation_rect(image,boxes[i])
-        resize_width = segment.shape[0] * height / segment.shape[1]
-        if resize_width > max_width:
-            resize_width = max_width
+        text_length = text_lengths[i]
+        resize_width = int(text_length * scale)
         segment = cv2.resize(segment,(resize_width,height))
+
         #paddding
         h,w,_ = segment.shape
-        padding = np.full((height,max_width,3),(0,0,0),dtype=np.float32)
+        padding = np.full((height,padding_width,3),(0,0,0),dtype=np.float32)
         padding[:h,:0:w] = segment
         segments.append(padding)
-    return segments
+    return segments,padding_width
 
 def crop_rotation_rect(image,box):
     """

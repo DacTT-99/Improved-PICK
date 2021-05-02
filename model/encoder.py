@@ -36,7 +36,7 @@ class Encoder(nn.Module):
         char_embedding_dim : int
             parameter d_model of Transformer
         out_dim : int
-            [description]
+            Same with Dimmension of model text embedding
         image_feature_dim : int, optional
             out_chanels of CNN, by default 512
         nheaders : int, optional
@@ -87,7 +87,7 @@ class Encoder(nn.Module):
         self.conv = nn.Conv2d(image_feature_dim, out_dim, self.roi_pooling_size)
         self.bn = nn.BatchNorm2d(out_dim)
 
-        self.projection = nn.Linear(2 * out_dim, out_dim)
+        self.projection = nn.Linear(128, 64,bias=False)
         self.norm = nn.LayerNorm(out_dim)
 
         # Compute the positional encodings once in log space.
@@ -103,7 +103,7 @@ class Encoder(nn.Module):
         self.pe_dropout = nn.Dropout(self.dropout)
         self.output_dropout = nn.Dropout(self.dropout)
 
-    def forward(self, images: torch.Tensor, boxes_coordinate: torch.Tensor, transcripts: torch.Tensor,
+    def forward(self, images_segments: torch.Tensor, boxes_coordinate: torch.Tensor, transcripts: torch.Tensor,
                 src_key_padding_mask: torch.Tensor):
         '''
         :param images: whole_images, shape is (B, N, H, W, C), where B is batch size, N is the number of segments of
@@ -120,55 +120,40 @@ class Encoder(nn.Module):
         :return: set of nodes X, shape is (B*N, T, D)
         '''
 
+        # B : batch size
+        # N : Number of boxes in single image
+        # T : Max length of transcripts
+
         B, N, T, D = transcripts.shape
 
-        # get image embedding using cnn
-        # (B, 3, H, W)
-        _, _, origin_H, origin_W = images.shape
+        # get image embedding using cnn : (B*N, C, H, W)
 
-        # image embedding: (B, C, H/16, W/16)
-        images = self.cnn(images)
-        _, C, H, W = images.shape
+        # image segments embedding: (B*N, C, H/16, W/16)
+        images_segments_embedding = self.cnn(images_segments)
+        # change number of chanels : (B*N, D, H/16, W/16)
+        images_segments_embedding = self.conv(images_segments_embedding)
+        # flatten : (B*N, D, H*W/256)
+        images_segments_embedding = torch.flatten(images_segments_embedding,start_dim=2,end_dim=-1)
+        # pooling: (B*N, D, 64)
+        images_segments_embedding = self.conv(images_segments_embedding)
 
-        # generate rois for roi pooling, rois shape is (B, N, 5), 5 means (batch_index, x0, y0, x1, y1)
-        rois_batch = torch.zeros(B, N, 5, device=images.device)
-        # Loop on the every image.
-        for i in range(B):  # (B, N, 8)
-            # (N, 8)
-            doc_boxes = boxes_coordinate[i]
-            # (N, 4)
-            pos = torch.stack([doc_boxes[:, 0], doc_boxes[:, 1], doc_boxes[:, 4], doc_boxes[:, 5]], dim=1)
-            rois_batch[i, :, 1:5] = pos
-            rois_batch[i, :, 0] = i
+        # get transcript embedding using transformer
 
-        spatial_scale = float(H / origin_H)
-        # use roi pooling get image segments
-        # (B*N, C, roi_pooling_size, roi_pooling_size)
-        if self.roi_pooling_mode == 'roi_align':
-            image_segments = roi_align(images, rois_batch.view(-1, 5), self.roi_pooling_size, spatial_scale)
-        else:
-            image_segments = roi_pool(images, rois_batch.view(-1, 5), self.roi_pooling_size, spatial_scale)
-
-        # (B*N, D, 1, 1) - pooling step
-        image_segments = F.relu(self.bn(self.conv(image_segments)))
-        # # (B*N, D,)
-        image_segments = image_segments.squeeze()
-
-        # (B*N, 1, D)
-        image_segments = image_segments.unsqueeze(dim=1)
-
-        # add positional embedding
+        # add positional embedding : (B, N, T, D)
         transcripts_segments = self.pe_dropout(transcripts + self.position_embedding[:, :, :transcripts.size(2), :])
         # (B*N, T ,D)
         transcripts_segments = transcripts_segments.reshape(B * N, T, D)
+        # (T, B*N, D)
+        transcripts_segments = transcripts_segments.transpose(0,1).contiguous()
+        # Transcripts segments embedding : (T, B*N, D)
+        transcripts_segments_embedding = self.transformer_encoder(transcripts_segments,src_key_padding_mask=src_key_padding_mask)
+        # (B*N,T, D)
+        transcripts_segments_embedding = transcripts_segments_embedding.transpose(0,1)
+        # (B*N, D, T)
+        transcripts_segments_embedding = transcripts_segments_embedding.transpose(1,2).contiguous()
 
-        # (B*N, T, D)
-        # TODO wtf is this shit??
-        image_segments = image_segments.expand_as(transcripts_segments) 
-
-        # here we first add image embedding and text embedding together,
-        # then as the input of transformer to get a non-local fusion features, different from paper process.
-        out = image_segments + transcripts_segments
+        #Concatenation : (B*N, D, T + 64)
+        out = torch.cat([images_segments_embedding,transcripts_segments_embedding],dim=2)
 
         # (T, B*N, D)
         out = out.transpose(0, 1).contiguous()

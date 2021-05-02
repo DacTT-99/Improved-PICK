@@ -166,19 +166,18 @@ class BatchCollateFn(object):
         # fix MAX_BOXES_NUM and MAX_TRANSCRIPT_LEN. this ensures batch has same shape, but lead to waste memory and slow speed..
         # this is suitable to one nodes multi gpus training mode, due to pytorch DataParallel training strategy
         # max_boxes_num_batch = documents.MAX_BOXES_NUM
-        # max_transcript_len = documents.MAX_TRANSCRIPT_LEN
-
+        max_transcript_len_global = documents.MAX_TRANSCRIPT_LEN_GLOBAL
+        segment_max_width = documents.MAX_WIDTH
         ### padding every sample with same shape, then construct batch_list samples  ###
 
-        # whole image, B, C, H, W
-        image_batch_tensor = torch.stack([self.trsfm(x.whole_image) for x in batch_list], dim=0).float()
         # image_segments, B, N, C, H, W
-        # TODO apply transform and padding to segment
         images_segments_batch_list = []
+        padding_width = segment_max_width * max_transcript_len / max_transcript_len_global
         for i, x in enumerate(batch_list):
-            single_image_segments_padded = F.pad(torch.stack([self.trsfm(y) for _,y in enumerate(x.image_segments)], dim=0).float(),(0,0,0,0,0,0,0,max_boxes_num_batch-x.boxes_num))
+            single_image_segments_padded = F.pad(torch.stack([self.trsfm(y) for _,y in enumerate(x.image_segments)], dim=0).float(),(0,padding_width-x.segment_width,0,0,0,0,0,max_boxes_num_batch-x.boxes_num))
             images_segments_batch_list.append(single_image_segments_padded)
         images_segments_batch_tensor = torch.stack(images_segments_batch_list,dim=0)
+
         # relation features, (B, num_boxes, num_boxes, 6)
         relation_features_padded_list = [F.pad(torch.FloatTensor(x.relation_features),
                                                (0, 0, 0, max_boxes_num_batch - x.boxes_num,
@@ -232,8 +231,7 @@ class BatchCollateFn(object):
 
         # Convert the data into dict.
         if self.training:
-            batch = dict(whole_image=image_batch_tensor,
-                         image_segments=images_segments_batch_tensor,
+            batch = dict(image_segments=images_segments_batch_tensor,
                          relation_features=relation_features_batch_tensor,
                          text_segments=text_segments_batch_tensor,
                          text_length=text_length_batch_tensor,
@@ -242,8 +240,7 @@ class BatchCollateFn(object):
                          iob_tags_label=iob_tags_label_batch_tensor,
                          filenames=filenames)
         else:
-            batch = dict(whole_image=image_batch_tensor,
-                         image_segments=images_segments_batch_tensor,
+            batch = dict(image_segments=images_segments_batch_tensor,
                          relation_features=relation_features_batch_tensor,
                          text_segments=text_segments_batch_tensor,
                          text_length=text_length_batch_tensor,
