@@ -128,9 +128,9 @@ class Encoder(nn.Module):
         B, N, T, D = transcripts.shape
 
         # get image embedding using cnn : (B*N, C, H, W)
-
+        images_segments_embedding = torch.flatten(images_segments,0,1)
         # image segments embedding: (B*N, C, H/16, W/16)
-        images_segments_embedding = self.cnn(images_segments)
+        images_segments_embedding = self.cnn(images_segments_embedding)
         # change number of chanels : (B*N, D, H/16, W/16)       (B*N, D, 4, T)
         images_segments_embedding = self.conv(images_segments_embedding)
 
