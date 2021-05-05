@@ -52,8 +52,6 @@ class PICKDataset(Dataset):
         self.keep_ratio = keep_ratio
         self.ignore_error = ignore_error
         self.training = training
-        assert resized_image_size and len(resized_image_size) == 2, 'resized image size not be set.'
-        self.resized_image_size = tuple(resized_image_size)  # (w, h)
 
         if self.training:  # used for train and validation mode
             self.files_name = Path(files_name)
@@ -69,7 +67,7 @@ class PICKDataset(Dataset):
             self.images_folder: Path = Path(images_folder)
 
         if not (self.boxes_and_transcripts_folder.exists() and self.images_folder.exists()):
-            raise FileNotFoundError('Not contain boxes_and_transcripts floader {} or images folder {}.'
+            raise FileNotFoundError('Not contain boxes_and_transcripts folder {} or images folder {}.'
                                     .format(self.boxes_and_transcripts_folder.as_posix(),
                                             self.images_folder.as_posix()))
         if self.training:
@@ -128,10 +126,10 @@ class PICKDataset(Dataset):
             # TODO add read and save cache function, to speed up data loaders
 
             if self.training:
-                document = documents.Document(boxes_and_transcripts_file, image_file, self.resized_image_size,
+                document = documents.Document(boxes_and_transcripts_file, image_file, 64,1024,
                                               self.iob_tagging_type, entities_file, training=self.training)
             else:
-                document = documents.Document(boxes_and_transcripts_file, image_file, self.resized_image_size,
+                document = documents.Document(boxes_and_transcripts_file, image_file, 64,1024,
                                               image_index=index, training=self.training)
             return document
         except Exception as e:
@@ -172,7 +170,7 @@ class BatchCollateFn(object):
 
         # image_segments, B, N, C, H, W
         images_segments_batch_list = []
-        padding_width = segment_max_width * max_transcript_len / max_transcript_len_global
+        padding_width = int(segment_max_width * max_transcript_len / max_transcript_len_global)
         for i, x in enumerate(batch_list):
             single_image_segments_padded = F.pad(torch.stack([self.trsfm(y) for _,y in enumerate(x.image_segments)], dim=0).float(),(0,padding_width-x.segment_width,0,0,0,0,0,max_boxes_num_batch-x.boxes_num))
             images_segments_batch_list.append(single_image_segments_padded)

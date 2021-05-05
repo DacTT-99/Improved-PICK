@@ -14,7 +14,7 @@ from torchvision.ops import roi_pool
 from . import resnet
 
 import numpy as np
-np.zeros()
+
 class Encoder(nn.Module):
     def __init__(self,
                  char_embedding_dim: int,
@@ -84,7 +84,8 @@ class Encoder(nn.Module):
         else:
             raise NotImplementedError()
 
-        self.conv = nn.Conv2d(image_feature_dim, out_dim, self.roi_pooling_size)
+        self.conv = nn.Conv2d(image_feature_dim, out_dim, [3,3])
+        self.pooling = nn.Conv2d(out_dim,out_dim,[5,1])
         self.bn = nn.BatchNorm2d(out_dim)
 
         self.projection = nn.Linear(128, 64,bias=False)
@@ -130,11 +131,7 @@ class Encoder(nn.Module):
 
         # image segments embedding: (B*N, C, H/16, W/16)
         images_segments_embedding = self.cnn(images_segments)
-        # change number of chanels : (B*N, D, H/16, W/16)
-        images_segments_embedding = self.conv(images_segments_embedding)
-        # flatten : (B*N, D, H*W/256)
-        images_segments_embedding = torch.flatten(images_segments_embedding,start_dim=2,end_dim=-1)
-        # pooling: (B*N, D, 64)
+        # change number of chanels : (B*N, D, H/16, W/16)       (B*N, D, 4, T)
         images_segments_embedding = self.conv(images_segments_embedding)
 
         # get transcript embedding using transformer
@@ -151,18 +148,24 @@ class Encoder(nn.Module):
         transcripts_segments_embedding = transcripts_segments_embedding.transpose(0,1)
         # (B*N, D, T)
         transcripts_segments_embedding = transcripts_segments_embedding.transpose(1,2).contiguous()
+        # (B*N, D, 1, T)
+        transcripts_segments_embedding = transcripts_segments_embedding.unsqueeze(dim=2)
 
-        #Concatenation : (B*N, D, T + 64)
+        #Concatenation : (B*N, D, 5, T)
         out = torch.cat([images_segments_embedding,transcripts_segments_embedding],dim=2)
 
-        # (T, B*N, D)
-        out = out.transpose(0, 1).contiguous()
+        # pooling : (B*N, D, 1, T)
+        out = self.pooling(out)
+        # (B*N, D, T)
+        out = out.squeeze()
+        # ()
+        #out = out.transpose(0, 1).contiguous()
 
         # (T, B*N, D)
-        out = self.transformer_encoder(out, src_key_padding_mask=src_key_padding_mask)
+        #out = self.transformer_encoder(out, src_key_padding_mask=src_key_padding_mask)
 
         # (B*N, T, D)
-        out = out.transpose(0, 1).contiguous()
+        out = out.transpose(1, 2).contiguous()
         out = self.norm(out)
         out = self.output_dropout(out)
 

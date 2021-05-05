@@ -146,7 +146,13 @@ class Document:
             relation_features = normalize_relation_features(relation_features, width=width, height=height)
             # The length of texts of each segment.
             text_segments = [list(trans) for trans in transcripts[:boxes_num]]
-            image_segments,segment_width = crop_image_segments(image,boxes,boxes_num,self.segment_height,self.segment_max_width,text_segments,transcript_len,MAX_TRANSCRIPT_LEN_GLOBAL)
+            # texts shape is (num_texts, max_texts_len), texts_len shape is (num_texts,)
+            texts, texts_len = TextSegmentsField.process(text_segments)
+            texts = texts[:, :transcript_len].numpy()
+            texts_len = np.clip(texts_len.numpy(), 0, transcript_len)
+            text_segments = (texts, texts_len)
+
+            image_segments,segment_width = crop_image_segments(image,boxes,boxes_num,self.segment_height,self.segment_max_width,texts_len,transcript_len,MAX_TRANSCRIPT_LEN_GLOBAL)
             self.segment_width = segment_width
 
             if self.training:
@@ -173,17 +179,11 @@ class Document:
                 iob_tags_label = IOBTagsField.process(iob_tags_label)[:, :transcript_len].numpy()
                 box_entity_types = [entities_vocab_cls.stoi[t] for t in box_entity_types[:boxes_num]]
 
-            # texts shape is (num_texts, max_texts_len), texts_len shape is (num_texts,)
-            texts, texts_len = TextSegmentsField.process(text_segments)
-            texts = texts[:, :transcript_len].numpy()
-            texts_len = np.clip(texts_len.numpy(), 0, transcript_len)
-            text_segments = (texts, texts_len)
-
             for i in range(boxes_num):
                 mask[i, :texts_len[i]] = 1
 
             #self.whole_image = RawField().preprocess(image)
-            self.image_segments = RawField.preprocess(image_segments)
+            self.image_segments = image_segments
             self.text_segments = TextSegmentsField.preprocess(text_segments)  # (text, texts_len)
             self.boxes_coordinate = RawField().preprocess(resized_boxes)
             self.relation_features = RawField().preprocess(relation_features)
@@ -486,7 +486,7 @@ def crop_image_segments(image,boxes,boxes_num,height,max_width,text_lengths,max_
     List of image segments
     """
     segments = []
-    padding_width = max_width * max_transcript_length / max_transcript_length_global
+    padding_width = int(max_width * max_transcript_length / max_transcript_length_global)
     scale = max_width / max_transcript_length_global
     for i in range(0,boxes_num):
         segment = crop_rotation_rect(image,boxes[i])
@@ -497,7 +497,7 @@ def crop_image_segments(image,boxes,boxes_num,height,max_width,text_lengths,max_
         #paddding
         h,w,_ = segment.shape
         padding = np.full((height,padding_width,3),(0,0,0),dtype=np.float32)
-        padding[:h,:0:w] = segment
+        padding[:h,:w] = segment
         segments.append(padding)
     return segments,padding_width
 
@@ -517,7 +517,7 @@ def crop_rotation_rect(image,box):
     out : cv2 image
         image segment
     """
-    contours = np.array(box).reshape(4,2)
+    contours = np.array(box).reshape(4,2).astype(int)
     rotated_rect = cv2.minAreaRect(contours)
 
     # the order of the box points: bottom left, top left, top right, bottom right
