@@ -74,7 +74,7 @@ class GraphLearningLayer(nn.Module):
         energy = torch.einsum("bqhd,bkhd->bhqk",[query,key])
         # A: (B, H, N, N)
         attention = torch.softmax(energy/(self.in_dim ** (1/2)),dim=3)
-        attention = attention.view(B,N,N,self.n_heads)
+        attention = attention.view(B,N,N,self.n_heads,1)
 
         # (B, N, N, H, D)
         out = distance*attention
@@ -82,7 +82,7 @@ class GraphLearningLayer(nn.Module):
         out = out.view(B,N,N,-1)
         # (B, N, N)
         out = torch.einsum("bijd,d->bij",[out,self.learn_w])
-        out = F.leaky_relu(distance)
+        out = F.leaky_relu(out)
 
         # for numerical stability, due to softmax operation mable produce large value
         max_out_v, _ = out.max(dim=-1, keepdim=True)
@@ -261,7 +261,7 @@ class GLCN(nn.Module):
                  out_dim: int,
                  gamma: float = 0.0001,
                  eta: float = 1,
-                 learning_dim: int = 128,
+                 n_heads: int = 4,
                  num_layers=2):
         '''
         perform graph learning and multi-time graph convolution operation
@@ -269,12 +269,12 @@ class GLCN(nn.Module):
         :param out_dim:
         :param gamma:
         :param eta:
-        :param learning_dim:
+        :param n_heads:
         :param num_layers:
         '''
         super().__init__()
 
-        self.gl_layer = GraphLearningLayer(in_dim=in_dim, gamma=gamma, eta=eta, learning_dim=learning_dim)
+        self.gl_layer = GraphLearningLayer(in_dim=in_dim,n_heads =n_heads, gamma=gamma, eta=eta)
         modules = []
         in_dim_cur = in_dim
         for i in range(num_layers):

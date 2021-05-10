@@ -84,7 +84,7 @@ class Encoder(nn.Module):
         else:
             raise NotImplementedError()
 
-        self.conv = nn.Conv2d(image_feature_dim, out_dim, [3,3])
+        self.conv = nn.Conv2d(image_feature_dim, out_dim,padding=1,kernel_size=3)
         self.pooling = nn.Conv2d(out_dim,out_dim,[5,1])
         self.bn = nn.BatchNorm2d(out_dim)
 
@@ -104,8 +104,7 @@ class Encoder(nn.Module):
         self.pe_dropout = nn.Dropout(self.dropout)
         self.output_dropout = nn.Dropout(self.dropout)
 
-    def forward(self, images_segments: torch.Tensor, boxes_coordinate: torch.Tensor, transcripts: torch.Tensor,
-                src_key_padding_mask: torch.Tensor):
+    def forward(self, images_segments: torch.Tensor, transcripts: torch.Tensor, src_key_padding_mask: torch.Tensor):
         '''
         :param images: whole_images, shape is (B, N, H, W, C), where B is batch size, N is the number of segments of
                 the documents, H is height of image, W is width of image, C is channel of images (default is 3).
