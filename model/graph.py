@@ -14,15 +14,25 @@ from data_utils import documents
 
 
 class GraphLearningLayer(nn.Module):
-    def __init__(self, in_dim: int, learning_dim: int, gamma: float, eta: float):
+    def __init__(self, in_dim: int, n_heads: 4, gamma: float, eta: float):
         super().__init__()
-        self.projection = nn.Linear(in_dim, learning_dim, bias=False)
-        self.learn_w = nn.Parameter(torch.empty(learning_dim))
+        self.projection = nn.Linear(in_dim, in_dim, bias=False)
+        self.learn_w = nn.Parameter(torch.empty(in_dim))
+        self.in_dim = in_dim
+        self.n_heads = n_heads
+        self.head_dim = in_dim//n_heads
+
+        assert (self.n_heads * self.head_dim == in_dim), "in_dim size need to be div by heads"
+
+        self.value = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.key = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.query = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.fc_out = nn.Linear(n_heads*self.head_dim, self.head_dim, bias=False)
         self.gamma = gamma
         self.eta = eta
-        self.inint_parameters()
+        self.init_parameters()
 
-    def inint_parameters(self):
+    def init_parameters(self):
         nn.init.uniform_(self.learn_w, a=0, b=1)
 
     def forward(self, x: Tensor, adj: Tensor, box_num: Tensor = None):
@@ -37,24 +47,41 @@ class GraphLearningLayer(nn.Module):
         '''
         B, N, D = x.shape
 
+        # calculate distance
         # (B, N, D)
         x_hat = self.projection(x)
-        _, _, learning_dim = x_hat.shape
+        _, _, in_dim = x.shape
 
-        # (B, N, N, learning_dim)
-        x_i = x_hat.unsqueeze(2).expand(B, N, N, learning_dim)
-        x_j = x_hat.unsqueeze(1).expand(B, N, N, learning_dim)
-        # (B, N, N, learning_dim)
+        # (B, N, N, in_dim)
+        x_i = x_hat.unsqueeze(2).expand(B, N, N, in_dim)
+        x_j = x_hat.unsqueeze(1).expand(B, N, N, in_dim)
+        # (B, N, N, in_dim)
         distance = torch.abs(x_i - x_j)
-
         # add -1 flag to distance, if node is not exist. to separate normal node distances from not exist node distance.
         if box_num is not None:
             # mask = self.compute_static_mask(box_num)
             mask = self.compute_dynamic_mask(box_num)
             distance = distance + mask
+        # (B, N, N, H, D)
+        distance = distance.reshape(B,N,N,self.n_heads,self.head_dim)
 
+        # Calculate attention
+        y = x.reshape(B,N,self.n_heads,self.head_dim)
+        # Q: (B, N, H, D) ; K: (B, N, H, D)
+        query = self.query(y)
+        key = self.key(y)
+        # E: (B, H, N, N)
+        energy = torch.einsum("bqhd,bkhd->bhqk",[query,key])
+        # A: (B, H, N, N)
+        attention = torch.softmax(energy/(self.in_dim ** (1/2)),dim=3)
+        attention = attention.view(B,N,N,self.n_heads)
+
+        # (B, N, N, H, D)
+        out = distance*attention
+        # (B, N, N, in_dim)
+        out = out.view(B,N,N,-1)
         # (B, N, N)
-        distance = torch.einsum('bijd, d->bij', distance, self.learn_w)
+        out = torch.einsum("bijd,d->bij",[out,self.learn_w])
         out = F.leaky_relu(distance)
 
         # for numerical stability, due to softmax operation mable produce large value
@@ -181,9 +208,9 @@ class GCNLayer(nn.Module):
         self.bias_h = nn.Parameter(torch.empty(in_dim))
         self.w_node = nn.Parameter(torch.empty(in_dim, out_dim))
 
-        self.inint_parameters()
+        self.init_parameters()
 
-    def inint_parameters(self):
+    def init_parameters(self):
         nn.init.kaiming_uniform_(self.w_alpha, a=math.sqrt(5))
         nn.init.kaiming_uniform_(self.w_vi, a=math.sqrt(5))
         nn.init.kaiming_uniform_(self.w_vj, a=math.sqrt(5))
