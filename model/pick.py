@@ -106,8 +106,7 @@ class PICKModel(nn.Module):
         src_key_padding_mask, graph_node_mask = self.compute_mask(mask)
 
         # set of nodes, (B*N, T, D)
-        x = self.encoder(images_segments=image_segments, boxes_coordinate=boxes_coordinate, transcripts=text_emb,
-                         src_key_padding_mask=src_key_padding_mask)
+        x = self.encoder(images_segments=image_segments, transcripts=text_emb, src_key_padding_mask=src_key_padding_mask)
 
         ### Graph module ###
         # text_mask, True for valid, (including all not valid node), (B*N, T)
