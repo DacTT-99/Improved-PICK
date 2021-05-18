@@ -1,4 +1,5 @@
 import math
+import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
@@ -177,7 +178,13 @@ def resnet34(pretrained=False, output_channels=512):
     """
     model = ResNet(BasicBlock, [3, 4, 6, 3], output_channels=output_channels)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet34']))
+        state_dict = torch.hub.load_state_dict_from_url(model_urls['resnet34'])
+        pretrained_state_dict = {k:v for k, v in state_dict.items() if k in model.state_dict()}
+        for k,v in pretrained_state_dict.items():
+          try:
+            model.load_state_dict({k:v})
+          except Exception as e:
+            pass
     return model
 
 
