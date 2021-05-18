@@ -88,7 +88,6 @@ class Encoder(nn.Module):
         self.pooling = nn.Conv2d(out_dim,out_dim,[5,1])
         self.bn = nn.BatchNorm2d(out_dim)
 
-        self.projection = nn.Linear(128, 64,bias=False)
         self.norm = nn.LayerNorm(out_dim)
 
         # Compute the positional encodings once in log space.
