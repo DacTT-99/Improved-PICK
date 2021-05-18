@@ -197,13 +197,26 @@ class Trainer:
         self.train_loss_metrics.reset()
         ## step iteration start ##
         for step_idx, input_data_item in enumerate(self.data_loader):
-            step_idx += 1
-            for key, input_value in input_data_item.items():
-                if input_value is not None and isinstance(input_value, torch.Tensor):
-                    input_data_item[key] = input_value.to(self.device, non_blocking=True)
-            if self.config['trainer']['anomaly_detection']:
-                # This mode will increase the runtime and should only be enabled for debugging
-                with torch.autograd.detect_anomaly():
+            try:
+                step_idx += 1
+                for key, input_value in input_data_item.items():
+                    if input_value is not None and isinstance(input_value, torch.Tensor):
+                        input_data_item[key] = input_value.to(self.device, non_blocking=True)
+                if self.config['trainer']['anomaly_detection']:
+                    # This mode will increase the runtime and should only be enabled for debugging
+                    with torch.autograd.detect_anomaly():
+                        self.optimizer.zero_grad()
+                        # model forward
+                        output = self.model(**input_data_item)
+                        # calculate loss
+                        gl_loss = output['gl_loss']
+                        crf_loss = output['crf_loss']
+                        total_loss = torch.sum(crf_loss) + self.gl_loss_lambda * torch.sum(gl_loss)
+                        # backward
+                        total_loss.backward()
+                        # self.average_gradients(self.model)
+                        self.optimizer.step()
+                else:
                     self.optimizer.zero_grad()
                     # model forward
                     output = self.model(**input_data_item)
@@ -215,63 +228,53 @@ class Trainer:
                     total_loss.backward()
                     # self.average_gradients(self.model)
                     self.optimizer.step()
-            else:
-                self.optimizer.zero_grad()
-                # model forward
-                output = self.model(**input_data_item)
-                # calculate loss
-                gl_loss = output['gl_loss']
-                crf_loss = output['crf_loss']
-                total_loss = torch.sum(crf_loss) + self.gl_loss_lambda * torch.sum(gl_loss)
-                # backward
-                total_loss.backward()
-                # self.average_gradients(self.model)
-                self.optimizer.step()
 
-            # Use a barrier() to make sure that all process have finished forward and backward
-            if self.distributed:
-                dist.barrier()
-                #  obtain the sum of all total_loss at all processes
-                dist.all_reduce(total_loss, op=dist.reduce_op.SUM)
+                # Use a barrier() to make sure that all process have finished forward and backward
+                if self.distributed:
+                    dist.barrier()
+                    #  obtain the sum of all total_loss at all processes
+                    dist.all_reduce(total_loss, op=dist.reduce_op.SUM)
 
-                size = dist.get_world_size()
-            else:
-                size = 1
-            gl_loss /= size  # averages gl_loss across the whole world
-            crf_loss /= size  # averages crf_loss across the whole world
+                    size = dist.get_world_size()
+                else:
+                    size = 1
+                gl_loss /= size  # averages gl_loss across the whole world
+                crf_loss /= size  # averages crf_loss across the whole world
 
-            # calculate average loss across the batch size
-            avg_gl_loss = torch.mean(gl_loss)
-            avg_crf_loss = torch.mean(crf_loss)
-            avg_loss = avg_crf_loss + self.gl_loss_lambda * avg_gl_loss
-            # update metrics
-            self.writer.set_step((epoch - 1) * self.len_step + step_idx - 1) if self.local_master else None
-            self.train_loss_metrics.update('loss', avg_loss.item())
-            self.train_loss_metrics.update('gl_loss', avg_gl_loss.item() * self.gl_loss_lambda)
-            self.train_loss_metrics.update('crf_loss', avg_crf_loss.item())
+                # calculate average loss across the batch size
+                avg_gl_loss = torch.mean(gl_loss)
+                avg_crf_loss = torch.mean(crf_loss)
+                avg_loss = avg_crf_loss + self.gl_loss_lambda * avg_gl_loss
+                # update metrics
+                self.writer.set_step((epoch - 1) * self.len_step + step_idx - 1) if self.local_master else None
+                self.train_loss_metrics.update('loss', avg_loss.item())
+                self.train_loss_metrics.update('gl_loss', avg_gl_loss.item() * self.gl_loss_lambda)
+                self.train_loss_metrics.update('crf_loss', avg_crf_loss.item())
 
-            # log messages
-            if step_idx % self.log_step == 0:
-                self.logger_info('Train Epoch:[{}/{}] Step:[{}/{}] Total Loss: {:.6f} GL_Loss: {:.6f} CRF_Loss: {:.6f}'.
-                                 format(epoch, self.epochs, step_idx, self.len_step,
-                                        avg_loss.item(), avg_gl_loss.item() * self.gl_loss_lambda, avg_crf_loss.item()))
-                # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+                # log messages
+                if step_idx % self.log_step == 0:
+                    self.logger_info('Train Epoch:[{}/{}] Step:[{}/{}] Total Loss: {:.6f} GL_Loss: {:.6f} CRF_Loss: {:.6f}'.
+                                    format(epoch, self.epochs, step_idx, self.len_step,
+                                            avg_loss.item(), avg_gl_loss.item() * self.gl_loss_lambda, avg_crf_loss.item()))
+                    # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
-            # do validation after val_step_interval iteration
-            if self.do_validation and step_idx % self.val_step_interval == 0:
-                val_result_dict = self._valid_epoch(epoch)
-                self.logger_info('[Step Validation] Epoch:[{}/{}] Step:[{}/{}]  \n{}'.
-                                 format(epoch, self.epochs, step_idx, self.len_step,
-                                        SpanBasedF1MetricTracker.dict2str(val_result_dict)))
+                # do validation after val_step_interval iteration
+                if self.do_validation and step_idx % self.val_step_interval == 0:
+                    val_result_dict = self._valid_epoch(epoch)
+                    self.logger_info('[Step Validation] Epoch:[{}/{}] Step:[{}/{}]  \n{}'.
+                                    format(epoch, self.epochs, step_idx, self.len_step,
+                                            SpanBasedF1MetricTracker.dict2str(val_result_dict)))
 
-                # check if best metric, if true, then save as model_best checkpoint.
-                best, not_improved_count = self._is_best_monitor_metric(False, 0, val_result_dict)
-                if best:
-                    self._save_checkpoint(epoch, best)
+                    # check if best metric, if true, then save as model_best checkpoint.
+                    best, not_improved_count = self._is_best_monitor_metric(False, 0, val_result_dict)
+                    if best:
+                        self._save_checkpoint(epoch, best)
 
-            # decide whether continue iter
-            if step_idx == self.len_step + 1:
-                break
+                # decide whether continue iter
+                if step_idx == self.len_step + 1:
+                    break
+            except Exception as e:
+                print('OOM')
 
         ## step iteration end ##
 

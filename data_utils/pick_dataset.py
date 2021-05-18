@@ -126,10 +126,10 @@ class PICKDataset(Dataset):
             # TODO add read and save cache function, to speed up data loaders
 
             if self.training:
-                document = documents.Document(boxes_and_transcripts_file, image_file, 64,1024,
+                document = documents.Document(boxes_and_transcripts_file, image_file, 32,1024,
                                               self.iob_tagging_type, entities_file, training=self.training)
             else:
-                document = documents.Document(boxes_and_transcripts_file, image_file, 64,1024,
+                document = documents.Document(boxes_and_transcripts_file, image_file, 32,1024,
                                               image_index=index, training=self.training)
             return document
         except Exception as e:

@@ -84,8 +84,7 @@ class Encoder(nn.Module):
         else:
             raise NotImplementedError()
 
-        self.conv = nn.Conv2d(image_feature_dim, out_dim,padding=1,kernel_size=3)
-        self.pooling = nn.Conv2d(out_dim,out_dim,[5,1])
+        self.pooling = nn.Conv2d(out_dim,out_dim,[3,1])
         self.bn = nn.BatchNorm2d(out_dim)
 
         self.norm = nn.LayerNorm(out_dim)
@@ -129,8 +128,6 @@ class Encoder(nn.Module):
         images_segments_embedding = torch.flatten(images_segments,0,1)
         # image segments embedding: (B*N, C, H/16, W/16)
         images_segments_embedding = self.cnn(images_segments_embedding)
-        # change number of chanels : (B*N, D, H/16, W/16)       (B*N, D, 4, T)
-        images_segments_embedding = self.conv(images_segments_embedding)
 
         # get transcript embedding using transformer
 

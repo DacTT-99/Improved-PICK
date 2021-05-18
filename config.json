@@ -17,10 +17,10 @@
                 "char_embedding_dim":-1,
                 "out_dim": 512,
                 "nheaders": 4,
-                "nlayers": 3,
-                "feedforward_dim": 1024,
+                "nlayers": 2,
+                "feedforward_dim": 512,
                 "dropout": 0.1,
-                "image_encoder": "resnet18",
+                "image_encoder": "resnet34",
                 "roi_pooling_mode": "roi_align",
                 "roi_pooling_size": [7,7]
             },
@@ -118,8 +118,8 @@
     "trainer": {
         "epochs": 100,
         "gl_loss_lambda": 0.01,
-        "log_step_interval": 10,
-        "val_step_interval": 50,
+        "log_step_interval": 20,
+        "val_step_interval": 100,
 
         "save_dir": "saved/",
         "save_period": 20,
@@ -130,7 +130,7 @@
         "early_stop": 40,
 
         "anomaly_detection": false,
-        "tensorboard": false,
+        "tensorboard": true,
 
         "sync_batch_norm":true
     }
