@@ -280,6 +280,7 @@ class Trainer:
 
         # {'loss': avg_loss, 'gl_loss': avg_gl_loss, 'crf_loss': avg_crf_loss}
         log = self.train_loss_metrics.result()
+        self.writer.set_step(epoch, 'train')
         self.writer.add_scalar('total_loss',log['loss'])
         self.writer.add_scalar('gl_loss',log['gl_loss'])
         self.writer.add_scalar('crf_loss',log['crf_loss'])
@@ -287,6 +288,7 @@ class Trainer:
         if self.do_validation:
             val_result_dict = self._valid_epoch(epoch)
             log['val_result_dict'] = val_result_dict
+            self.writer.set_step(epoch, 'valid')
             self.writer.add_scalars('mEF_valid',{'total':val_result_dict['total']['mEF'],
                                                  'date':val_result_dict['date']['mEF'],
                                                  'company':val_result_dict['company']['mEF'],
