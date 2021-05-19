@@ -255,7 +255,7 @@ class Trainer:
                 if step_idx % self.log_step == 0:
                     self.logger_info('Train Epoch:[{}/{}] Step:[{}/{}] Total Loss: {:.6f} GL_Loss: {:.6f} CRF_Loss: {:.6f}'.
                                     format(epoch, self.epochs, step_idx, self.len_step,
-                                            avg_loss.item(), avg_gl_loss.item() * self.gl_loss_lambda, avg_crf_loss.item()))
+                                            self.train_loss_metrics.avg('loss'), self.train_loss_metrics.avg('gl_loss') * self.gl_loss_lambda, self.train_loss_metrics.avg('crf_loss')))
                     # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
                 # do validation after val_step_interval iteration
@@ -280,12 +280,17 @@ class Trainer:
 
         # {'loss': avg_loss, 'gl_loss': avg_gl_loss, 'crf_loss': avg_crf_loss}
         log = self.train_loss_metrics.result()
-
+        self.writer.add_scalar('total_loss',log['loss'])
+        self.writer.add_scalar('gl_loss',log['gl_loss'])
+        self.writer.add_scalar('crf_loss',log['crf_loss'])
         # do validation after training an epoch
         if self.do_validation:
             val_result_dict = self._valid_epoch(epoch)
             log['val_result_dict'] = val_result_dict
-
+            self.writer.add_scalars('mEF_valid',{'total':val_result_dict['total']['mEF'],
+                                                 'date':val_result_dict['date']['mEF'],
+                                                 'company':val_result_dict['company']['mEF'],
+                                                 'address':val_result_dict['address']['mEF']})
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
 
@@ -344,7 +349,7 @@ class Trainer:
         #     self.writer.add_histogram(name, p, bins='auto')
 
         f1_result_dict = self.valid_f1_metrics.result()
-
+        self.train_loss_metrics.update()
         # rollback to train mode
         self.model.train()
 
