@@ -74,7 +74,7 @@ class Encoder(nn.Module):
         if image_encoder == 'resnet18':
             self.cnn = resnet.resnet18(output_channels=image_feature_dim)
         elif image_encoder == 'resnet34':
-            self.cnn = resnet.resnet34(output_channels=image_feature_dim)
+            self.cnn = resnet.resnet34(output_channels=image_feature_dim,pretrained=True)
         elif image_encoder == 'resnet50':
             self.cnn = resnet.resnet50(output_channels=image_feature_dim)
         elif image_encoder == 'resnet101':

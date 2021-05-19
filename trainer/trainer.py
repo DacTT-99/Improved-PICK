@@ -349,7 +349,6 @@ class Trainer:
         #     self.writer.add_histogram(name, p, bins='auto')
 
         f1_result_dict = self.valid_f1_metrics.result()
-        self.train_loss_metrics.update()
         # rollback to train mode
         self.model.train()
 
