@@ -281,9 +281,9 @@ class Trainer:
         # {'loss': avg_loss, 'gl_loss': avg_gl_loss, 'crf_loss': avg_crf_loss}
         log = self.train_loss_metrics.result()
         self.writer.set_step(epoch, 'train')
-        self.writer.add_scalar('total_loss',log['loss'])
-        self.writer.add_scalar('gl_loss',log['gl_loss'])
-        self.writer.add_scalar('crf_loss',log['crf_loss'])
+        self.writer.add_scalar('total_loss_epoch',log['loss'])
+        self.writer.add_scalar('gl_loss_epoch',log['gl_loss'])
+        self.writer.add_scalar('crf_loss_epoch',log['crf_loss'])
         # do validation after training an epoch
         if self.do_validation:
             val_result_dict = self._valid_epoch(epoch)
