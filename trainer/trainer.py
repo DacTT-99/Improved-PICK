@@ -293,6 +293,11 @@ class Trainer:
                                                  'date':val_result_dict['date']['mEF'],
                                                  'company':val_result_dict['company']['mEF'],
                                                  'address':val_result_dict['address']['mEF']})
+
+            # self.writer.add_scalars('mEF_valid',{'total':val_result_dict['total']['mEF'],
+            #                                      'product':val_result_dict['product']['mEF'],
+            #                                      'price':val_result_dict['price']['mEF']})
+
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
 

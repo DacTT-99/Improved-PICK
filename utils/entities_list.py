@@ -10,6 +10,12 @@ Entities_list = [
 ]
 
 # Entities_list = [
+#     "product",
+#     "price",
+#     "total"
+# ]
+
+# Entities_list = [
 #     "ticket_num",
 #     "starting_station",
 #     "train_num",
