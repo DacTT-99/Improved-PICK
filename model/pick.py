@@ -31,11 +31,19 @@ class PICKModel(nn.Module):
         self.word_emb = nn.Embedding(**embedding_kwargs)
 
         encoder_kwargs['char_embedding_dim'] = embedding_kwargs['embedding_dim']
-        self.encoder = Encoder(**encoder_kwargs)
+        encoder_changed = encoder_kwargs.pop('changed',False)
+        if encoder_changed:
+            self.encoder = Encoder(**encoder_kwargs)
+        else:
+            self.encoder = Encoder(**encoder_kwargs)
 
         graph_kwargs['in_dim'] = encoder_kwargs['out_dim']
         graph_kwargs['out_dim'] = encoder_kwargs['out_dim']
-        self.graph = GLCN(**graph_kwargs)
+        graph_changed = graph_kwargs.pop('changed',False)
+        if graph_changed:
+            self.graph = GLCN(**graph_kwargs)
+        else:
+            self.graph = GLCN(**graph_kwargs)
 
         decoder_kwargs['bilstm_kwargs']['input_size'] = encoder_kwargs['out_dim']
         if decoder_kwargs['bilstm_kwargs']['bidirectional']:

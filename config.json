@@ -22,7 +22,8 @@
                 "dropout": 0.1,
                 "image_encoder": "resnet34",
                 "roi_pooling_mode": "roi_align",
-                "roi_pooling_size": [7,7]
+                "roi_pooling_size": [7,7],
+                "changed" : true
             },
             "graph_kwargs":{
                 "in_dim":-1,
@@ -30,7 +31,8 @@
                 "eta": 1,
                 "gamma": 1,
                 "n_heads": 4,
-                "num_layers": 2
+                "num_layers": 2,
+                "changed" : false
             },
             "decoder_kwargs":{
                 "bilstm_kwargs":{
@@ -57,7 +59,7 @@
     "train_dataset": {
         "type": "PICKDataset",
         "args": {
-            "files_name":"/home/list_99/Python/KIE/Improved-PICK/data/data_examples_root/train_samples_list.csv",
+            "files_name":"",
             "boxes_and_transcripts_folder":"boxes_and_transcripts",
             "images_folder":"images",
             "entities_folder":"entities",
@@ -69,7 +71,7 @@
     "validation_dataset": {
         "type": "PICKDataset",
         "args": {
-            "files_name":"/home/list_99/Python/KIE/Improved-PICK/data/data_examples_root/train_samples_list.csv",
+            "files_name":"",
             "boxes_and_transcripts_folder":"boxes_and_transcripts",
             "images_folder":"images",
             "entities_folder":"entities",
@@ -81,7 +83,7 @@
     "train_data_loader": {
         "type": "DataLoader",
         "args":{
-            "batch_size": 4,
+            "batch_size": 2,
             "shuffle": true,
             "drop_last": true,
             "num_workers": 8,
@@ -91,7 +93,7 @@
     "val_data_loader": {
           "type": "DataLoader",
           "args":{
-              "batch_size": 4,
+              "batch_size": 2,
               "shuffle": false,
               "drop_last": false,
               "num_workers": 8,
@@ -121,7 +123,7 @@
         "log_step_interval": 20,
         "val_step_interval": 100,
 
-        "save_dir": "saved/",
+        "save_dir": "",
         "save_period": 20,
         "log_verbosity": 2,
 
