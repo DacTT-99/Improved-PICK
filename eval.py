@@ -28,9 +28,11 @@ def eval(args):
 	pick_model.eval()
 
 	# setup dataset and data_loader instances
-	test_dataset = PICKDataset(boxes_and_transcripts_folder=args.bt,
-								images_folder=args.impt,
-								resized_image_size=(480, 960),
+	test_dataset = PICKDataset(	files_name=args.fn,
+								boxes_and_transcripts_folder='boxes_and_transcripts',
+								images_folder='images',
+								entities_folder='entities',
+								iob_tagging_type='box_and_within_box_level',
 								ignore_error=False,
 								training=True)
 	test_data_loader = DataLoader(test_dataset, batch_size=args.bs, shuffle=False,
@@ -72,10 +74,8 @@ if __name__ == '__main__':
 	args = argparse.ArgumentParser(description='PyTorch PICK Testing')
 	args.add_argument('-ckpt', '--checkpoint', default=None, type=str,
 						help='path to load checkpoint (default: None)')
-	args.add_argument('--bt', '--boxes_transcripts', default=None, type=str,
+	args.add_argument('--fn', '--file_name', default=None, type=str,
 						help='ocr results folder including boxes and transcripts (default: None)')
-	args.add_argument('--impt', '--images_path', default=None, type=str,
-						help='images folder path (default: None)')
 	args.add_argument('-output', '--output_folder', default='predict_results', type=str,
 						help='output folder (default: predict_results)')
 	args.add_argument('-g', '--gpu', default=-1, type=int,
