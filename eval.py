@@ -1,5 +1,6 @@
 import argparse
 import torch
+from torch._C import dtype
 from tqdm import tqdm
 from pathlib import Path
 
@@ -42,6 +43,9 @@ def eval(args):
 	output_path = Path(args.output_folder)
 	output_path.mkdir(parents=True, exist_ok=True)
 
+	num_classes = 3
+	confusion_matrix = torch.zeros([num_classes+1,num_classes+1])
+	
 	# caculate evaluation meansure
 	with torch.no_grad():
 		for step_idx, input_data_item in tqdm(enumerate(test_data_loader)):
@@ -55,18 +59,64 @@ def eval(args):
 			output = pick_model(**input_data_item)
 			logits = output['logits']  # (B, N*T, out_dim)
 			new_mask = output['new_mask']
-			image_indexs = input_data_item['image_indexs']  # (B,)
+
+			#image_indexs = input_data_item['image_indexs']  # (B,)
 			text_segments = input_data_item['text_segments']  # (B, num_boxes, T)
-			mask = input_data_item['mask']
+			gt_masks = input_data_item['mask']
 			gt_tags = input_data_item['iob_tags_label']
+			gt_text_len = input_data_item['text_length']
 
 			best_paths = pick_model.decoder.crf_layer.viterbi_tags(logits, mask=new_mask, logits_batch_first=True)
 			predicted_tags = []
 			for path, score in best_paths:
-				predicted_tags.append(path)
-		for gt_tag,pred_tag in enumerate(zip(gt_tags,predicted_tags)):
-			if gt_tag == pred_tag:
-				print('a')
+				predicted_tags.append(torch.Tensor(path))
+
+
+			doc_seq_len = gt_text_len.sum(dim=-1)
+			max_doc_seq_len = doc_seq_len.max()
+
+			B,N,T = gt_tags.shape
+			gt_tags = gt_tags.reshape(B,N*T)
+			gt_masks = gt_masks.reshape(B,N*T)
+			new_gt_tags = torch.zeros_like(gt_tags,dtype=torch.int64)
+			new_gt_masks = torch.zeros_like(gt_masks)
+			
+			for i in range(B):
+				doc_x = gt_tags[i]
+				doc_mask_x = gt_masks[i]
+				valid_doc_x = doc_x[doc_mask_x == 1]
+				num_valid = valid_doc_x.size(0)
+				new_gt_tags[i,:num_valid] = valid_doc_x
+				new_gt_masks[i,:doc_seq_len[i]] = 1
+
+
+			new_gt_tags[new_gt_tags<num_classes] += num_classes
+			for i in range(B):
+				prev = 0
+				predicted_tags[i][predicted_tags[i]<num_classes] += num_classes
+				for box_len in gt_text_len[i]:
+					if torch.sum(new_gt_tags[i][prev:prev+box_len]) == torch.sum(predicted_tags[i][prev:prev+box_len]):
+						if new_gt_tags[i][prev] == 2*num_classes:
+							confusion_matrix[num_classes][num_classes] += 1			# 'other' entities
+						else:
+							confusion_matrix[new_gt_tags[i][prev]-num_classes][new_gt_tags[i][prev]-num_classes] += 1		# labeled entities
+					else:
+						gt_class = torch.argmax(torch.bincount(new_gt_tags[i][prev:prev+box_len].int()))
+						pred_class = torch.argmax(torch.bincount(predicted_tags[i][prev:prev+box_len].int()))
+						
+						if gt_class ==2*num_classes:
+							gt_class = num_classes
+						else:
+							gt_class-=num_classes
+						
+						if pred_class ==2*num_classes:
+							pred_class = num_classes
+						else:
+							pred_class-=num_classes
+
+						confusion_matrix[gt_class][pred_class] += 1
+					prev += box_len
+
 
 
 
