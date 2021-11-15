@@ -1,8 +1,10 @@
 import argparse
 import torch
-from torch._C import dtype
 from tqdm import tqdm
 from pathlib import Path
+import pandas as pd
+import seaborn as sn
+import matplotlib.pyplot as plt
 
 from torch.utils.data.dataloader import DataLoader
 from allennlp.data.dataset_readers.dataset_utils.span_utils import bio_tags_to_spans
@@ -12,6 +14,7 @@ import model.pick as pick_arch_module
 from data_utils.pick_dataset import PICKDataset
 from data_utils.pick_dataset import BatchCollateFn
 from utils.util import iob_index_to_str, text_index_to_str
+from utils.class_utils import iob_labels_vocab_cls
 
 def eval(args):
 	device = torch.device(f'cuda:{args.gpu}' if args.gpu != -1 else 'cpu')
@@ -116,7 +119,12 @@ def eval(args):
 
 						confusion_matrix[gt_class][pred_class] += 1
 					prev += box_len
-
+	tag = [iob_labels_vocab_cls.stoi[x] for x in range(num_classes)]
+	df_cm = pd.DataFrame(confusion_matrix,
+						 index=[i for i in tag],
+						 columns=[i for i in tag])
+	plt.figure(figsize = (10,7))
+	sn.heatmap(df_cm, annot=True)
 
 
 
