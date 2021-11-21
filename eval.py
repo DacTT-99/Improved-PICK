@@ -119,12 +119,14 @@ def eval(args):
 
 						confusion_matrix[gt_class][pred_class] += 1
 					prev += box_len
-	tag = [iob_labels_vocab_cls.stoi[x] for x in range(num_classes)]
+	confusion_matrix = torch.flip(confusion_matrix,[1])
+	tag = [iob_labels_vocab_cls.itos[x].splt('-')[1] for x in range(num_classes)]
+	tag.append('other')
 	df_cm = pd.DataFrame(confusion_matrix,
 						 index=[i for i in tag],
-						 columns=[i for i in tag])
+						 columns=[i for i in reversed(tag)])
 	plt.figure(figsize = (10,7))
-	sn.heatmap(df_cm, annot=True)
+	sn.heatmap(df_cm, annot=True,fmt='g')
 
 
 
