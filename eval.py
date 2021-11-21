@@ -2,6 +2,7 @@ import argparse
 import torch
 from tqdm import tqdm
 from pathlib import Path
+import os
 import pandas as pd
 import seaborn as sn
 import matplotlib.pyplot as plt
@@ -127,7 +128,8 @@ def eval(args):
 						 columns=[i for i in reversed(tag)])
 	plt.figure(figsize = (10,7))
 	sn.heatmap(df_cm, annot=True,fmt='g')
-
+	plt.savefig(os.path.join(args.output_folder,args.fn.split('.')[0] + '.png'))
+	
 
 
 if __name__ == '__main__':
