@@ -11,8 +11,7 @@ with modifications:
     * add conv2, bn2, relu2 layers for output final feature maps
 '''
 
-__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
-           'resnet152']
+__all__ = ['ResNet', 'resnet18', 'resnet34','resnet50', 'resnet101', 'resnet152']
 
 model_urls = {
     'resnet18': 'https://s3.amazonaws.com/pytorch/models/resnet18-5c106cde.pth',
@@ -166,7 +165,14 @@ def resnet18(pretrained=False, output_channels=512):
     """
     model = ResNet(BasicBlock, [2, 2, 2, 2], output_channels=output_channels)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet18']))
+        state_dict = torch.hub.load_state_dict_from_url(model_urls['resnet18'])
+        pretrained_state_dict = {
+            k : v for k, v in state_dict.items() if k in model.state_dict()}
+        for k, v in pretrained_state_dict.items():
+            try:
+                model.load_state_dict({k: v})
+            except Exception as e:
+                print("Load layer {} raise error {}".format(k, e))
     return model
 
 
@@ -179,12 +185,13 @@ def resnet34(pretrained=False, output_channels=512):
     model = ResNet(BasicBlock, [3, 4, 6, 3], output_channels=output_channels)
     if pretrained:
         state_dict = torch.hub.load_state_dict_from_url(model_urls['resnet34'])
-        pretrained_state_dict = {k:v for k, v in state_dict.items() if k in model.state_dict()}
-        for k,v in pretrained_state_dict.items():
-          try:
-            model.load_state_dict({k:v})
-          except Exception as e:
-            pass
+        pretrained_state_dict = {
+            k : v for k, v in state_dict.items() if k in model.state_dict()}
+        for k, v in pretrained_state_dict.items():
+            try:
+                model.load_state_dict({k: v})
+            except Exception as e:
+                print("Load layer {} raise error {}".format(k, e))
     return model
 
 
@@ -196,7 +203,14 @@ def resnet50(pretrained=False, output_channels=512):
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], output_channels=output_channels)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
+        state_dict = torch.hub.load_state_dict_from_url(model_urls['resnet50'])
+        pretrained_state_dict = {
+            k : v for k, v in state_dict.items() if k in model.state_dict()}
+        for k, v in pretrained_state_dict.items():
+            try:
+                model.load_state_dict({k: v})
+            except Exception as e:
+                print("Load layer {} raise error {}".format(k, e))
     return model
 
 
@@ -208,17 +222,31 @@ def resnet101(pretrained=False, output_channels=512):
     """
     model = ResNet(Bottleneck, [3, 4, 23, 3], output_channels=output_channels)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
+        state_dict = torch.hub.load_state_dict_from_url(model_urls['resnet101'])
+        pretrained_state_dict = {
+            k : v for k, v in state_dict.items() if k in model.state_dict()}
+        for k, v in pretrained_state_dict.items():
+            try:
+                model.load_state_dict({k: v})
+            except Exception as e:
+                print("Load layer {} raise error {}".format(k, e))
     return model
 
 
 def resnet152(pretrained=False, output_channels=512):
     """Constructs a ResNet-152 model.
-    
+
     Args:
       pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(Bottleneck, [3, 8, 36, 3], output_channels=output_channels)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
+        state_dict = torch.hub.load_state_dict_from_url(model_urls['resnet152'])
+        pretrained_state_dict = {
+            k : v for k, v in state_dict.items() if k in model.state_dict()}
+        for k, v in pretrained_state_dict.items():
+            try:
+                model.load_state_dict({k: v})
+            except Exception as e:
+                print("Load layer {} raise error {}".format(k, e))
     return model

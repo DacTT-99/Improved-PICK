@@ -7,9 +7,9 @@ from typing import *
 import torch
 import torch.nn as nn
 import numpy as np
-
-from .encoder import Encoder
-from .graph import GLCN
+import encoder
+import graph
+import decoder
 from .decoder import Decoder
 from utils.class_utils import keys_vocab_cls, iob_labels_vocab_cls
 
@@ -18,41 +18,33 @@ class PICKModel(nn.Module):
 
     def __init__(self, **kwargs):
         super().__init__()
-        embedding_kwargs = kwargs['embedding_kwargs']
-        encoder_kwargs = kwargs['encoder_kwargs']
-        graph_kwargs = kwargs['graph_kwargs']
-        decoder_kwargs = kwargs['decoder_kwargs']
-        self.make_model(embedding_kwargs, encoder_kwargs, graph_kwargs, decoder_kwargs)
+        embedding_module = kwargs['embedding']
+        encoder_module = kwargs['encoder']
+        graph_module = kwargs['graph']
+        decoder_module = kwargs['decoder']
+        self.make_model(embedding_module, encoder_module, graph_module, decoder_module)
 
-    def make_model(self, embedding_kwargs, encoder_kwargs, graph_kwargs, decoder_kwargs):
+    def make_model(self, embedding_module, encoder_module, graph_module, decoder_module):
         # Given the params of each component, creates components.
-        # embedding_kwargs-> word_emb
-        embedding_kwargs['num_embeddings'] = len(keys_vocab_cls)
-        self.word_emb = nn.Embedding(**embedding_kwargs)
 
-        encoder_kwargs['char_embedding_dim'] = embedding_kwargs['embedding_dim']
-        encoder_changed = encoder_kwargs.pop('changed',False)
-        if encoder_changed:
-            self.encoder = Encoder(**encoder_kwargs)
-        else:
-            self.encoder = Encoder(**encoder_kwargs)
+        embedding_module['args']['num_embeddings'] = len(keys_vocab_cls)
+        self.word_emb = getattr(nn,embedding_module['type'])(embedding_module['args'])
 
-        graph_kwargs['in_dim'] = encoder_kwargs['out_dim']
-        graph_kwargs['out_dim'] = encoder_kwargs['out_dim']
-        graph_changed = graph_kwargs.pop('changed',False)
-        if graph_changed:
-            self.graph = GLCN(**graph_kwargs)
-        else:
-            self.graph = GLCN(**graph_kwargs)
+        encoder_module['args']['transformer']['args']['TransformerEncoderLayer']['args']['d_model'] = embedding_module['embedding_dim']
+        self.encoder = getattr(encoder,encoder_module['type'])(encoder_module['args'])
 
-        decoder_kwargs['bilstm_kwargs']['input_size'] = encoder_kwargs['out_dim']
-        if decoder_kwargs['bilstm_kwargs']['bidirectional']:
-            decoder_kwargs['mlp_kwargs']['in_dim'] = decoder_kwargs['bilstm_kwargs']['hidden_size'] * 2
+        graph_module['in_dim'] = encoder_module['out_dim']
+        graph_module['out_dim'] = encoder_module['out_dim']
+        self.graph = getattr(graph,graph_module['type'])(graph_module['args'])
+
+        decoder_module['bilstm_module']['input_size'] = encoder_module['out_dim']
+        if decoder_module['bilstm_module']['bidirectional']:
+            decoder_module['mlp_module']['in_dim'] = decoder_module['bilstm_module']['hidden_size'] * 2
         else:
-            decoder_kwargs['mlp_kwargs']['in_dim'] = decoder_kwargs['bilstm_kwargs']['hidden_size']
-        decoder_kwargs['mlp_kwargs']['out_dim'] = len(iob_labels_vocab_cls)
-        decoder_kwargs['crf_kwargs']['num_tags'] = len(iob_labels_vocab_cls)
-        self.decoder = Decoder(**decoder_kwargs)
+            decoder_module['mlp_module']['in_dim'] = decoder_module['bilstm_module']['hidden_size']
+        decoder_module['mlp_module']['out_dim'] = len(iob_labels_vocab_cls)
+        decoder_module['crf_module']['num_tags'] = len(iob_labels_vocab_cls)
+        self.decoder = getattr(decoder,decoder_module['type'])(decoder_module['args'])
 
     def _aggregate_avg_pooling(self, input, text_mask):
         '''

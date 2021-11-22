@@ -31,31 +31,31 @@ np.random.seed(SEED)
 
 def main(config: ConfigParser, local_master: bool, logger=None):
     # setup dataset and data_loader instances
-    train_dataset = config.init_obj('train_dataset', pick_dataset_module)
+    train_dataset = config.init_obj(['train_dataset'], pick_dataset_module)
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) \
         if config['distributed'] else None
 
     is_shuffle = False if config['distributed'] else True
-    train_data_loader = config.init_obj('train_data_loader', torch.utils.data.dataloader,
+    train_data_loader = config.init_obj(['train_data_loader'], torch.utils.data.dataloader,
                                         dataset=train_dataset,
                                         sampler=train_sampler,
                                         shuffle=is_shuffle,
                                         collate_fn=BatchCollateFn())
 
-    val_dataset = config.init_obj('validation_dataset', pick_dataset_module)
-    val_data_loader = config.init_obj('val_data_loader', torch.utils.data.dataloader,
+    val_dataset = config.init_obj(['validation_dataset'], pick_dataset_module)
+    val_data_loader = config.init_obj(['val_data_loader'], torch.utils.data.dataloader,
                                       dataset=val_dataset,
                                       collate_fn=BatchCollateFn())
     logger.info(f'Dataloader instances created. Train datasets: {len(train_dataset)} samples '
                 f'Validation datasets: {len(val_dataset)} samples.') if local_master else None
 
     # build model architecture
-    pick_model = config.init_obj('model_arch', pick_arch_module)
+    pick_model = config.init_obj(['model_arch'], pick_arch_module)
     logger.info(f'Model created, trainable parameters: {pick_model.model_parameters()}.') if local_master else None
 
     # build optimizer, learning rate scheduler.
-    optimizer = config.init_obj('optimizer', torch.optim, pick_model.parameters())
-    lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
+    optimizer = config.init_obj(['optimizer'], torch.optim, pick_model.parameters())
+    lr_scheduler = config.init_obj(['lr_scheduler'], torch.optim.lr_scheduler, optimizer)
     logger.info('Optimizer and lr_scheduler created.') if local_master else None
 
     # print training related information

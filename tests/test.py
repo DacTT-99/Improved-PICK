@@ -46,7 +46,7 @@ def test_model():
 
     logger = config.get_logger('train')
 
-    model = config.init_obj('model_arch', pick_arch)
+    model = config.init_obj(['model_arch'], pick_arch)
     logger.info(model)
 
 
@@ -102,10 +102,10 @@ def test_model_forward():
         device = 'cpu'
     device = torch.device(device)
 
-    pick_model = config.init_obj('model_arch', pick_arch)
+    pick_model = config.init_obj(['model_arch'], pick_arch)
     pick_model.to(device)
 
-    dataset = config.init_obj('train_dataset', pick_dataset)
+    dataset = config.init_obj(['train_dataset'], pick_dataset)
 
     # filename = Path(__file__).parent.parent.joinpath('data/data_examples_root/train_samples_list.csv').as_posix()
     # dataset = PICKDataset(files_name=filename,
