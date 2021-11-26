@@ -47,11 +47,21 @@
             "graph":{
                 "type":"GLCN",
                 "args":{
-                    "in_dim":-1,
-                    "out_dim":-1,
-                    "gamma": 1,
-                    "eta": 1,
-                    "n_heads": 4,
+                    "graph_learning":{
+                        "type":"GraphLearningLayer",
+                        "args":{
+                            "in_dim":-1,
+                            "gamma": 1,
+                            "eta": 1,
+                            "n_heads": 4
+                        }
+                    },
+                    "graph_convolution":{
+                        "type":"GCNLayer",
+                        "args":{
+                            "out_dim":-1
+                        }
+                    },
                     "num_layers": 2
                 }
             },

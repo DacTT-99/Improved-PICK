@@ -99,34 +99,21 @@ def eval(args):
 				prev = 0
 				predicted_tags[i][predicted_tags[i]<num_classes] += num_classes
 				for box_len in gt_text_len[i]:
-					if torch.sum(new_gt_tags[i][prev:prev+box_len]) == torch.sum(predicted_tags[i][prev:prev+box_len]):
-						if new_gt_tags[i][prev] == 2*num_classes:
-							confusion_matrix[num_classes][num_classes] += 1			# 'other' entities
-						else:
-							confusion_matrix[new_gt_tags[i][prev]-num_classes][new_gt_tags[i][prev]-num_classes] += 1		# labeled entities
-					else:
-						gt_class = torch.argmax(torch.bincount(new_gt_tags[i][prev:prev+box_len].int()))
-						pred_class = torch.argmax(torch.bincount(predicted_tags[i][prev:prev+box_len].int()))
-						
-						if gt_class ==2*num_classes:
-							gt_class = num_classes
-						else:
-							gt_class-=num_classes
-						
-						if pred_class ==2*num_classes:
-							pred_class = num_classes
-						else:
-							pred_class-=num_classes
-
-						confusion_matrix[gt_class][pred_class] += 1
+					if box_len == 0:
+						continue
+					gt_class = torch.argmax(torch.bincount(new_gt_tags[i][prev:prev+box_len].int()))
+					pred_class = torch.argmax(torch.bincount(predicted_tags[i][prev:prev+box_len].int()))
+					confusion_matrix[gt_class-num_classes][pred_class-num_classes] += 1
 					prev += box_len
 	confusion_matrix = torch.flip(confusion_matrix,[1])
-	tag = [iob_labels_vocab_cls.itos[x].splt('-')[1] for x in range(num_classes)]
+	tag = [iob_labels_vocab_cls.itos[x].split('-')[1] for x in range(num_classes)]
 	tag.append('other')
-	df_cm = pd.DataFrame(confusion_matrix,
+	df_cm = pd.DataFrame(confusion_matrix.numpy()(),
 						 index=[i for i in tag],
 						 columns=[i for i in reversed(tag)])
-	plt.figure(figsize = (10,7))
+	plt.figure(figsize = (5,4))
+	plt.xlabel('predict')
+	plt.ylabel('label')
 	sn.heatmap(df_cm, annot=True,fmt='g')
 	plt.savefig(os.path.join(args.output_folder,args.fn.split('.')[0] + '.png'))
 	

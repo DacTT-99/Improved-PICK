@@ -183,11 +183,11 @@ class UnionLayer(nn.Module):
 
 class Decoder(nn.Module):
 
-    def __init__(self, bilstm_kwargs, mlp_kwargs, crf_kwargs):
+    def __init__(self, bilstm, mlp, crf):
         super().__init__()
         self.union_layer = UnionLayer()
-        self.bilstm_layer = BiLSTMLayer(bilstm_kwargs, mlp_kwargs)
-        self.crf_layer = ConditionalRandomField(**crf_kwargs)
+        self.bilstm_layer = BiLSTMLayer(bilstm['args'], mlp['args'])
+        self.crf_layer = ConditionalRandomField(**crf['args'])
 
     def forward(self, x: Tensor, x_gcn: Tensor, mask: Tensor, length: Tensor, tags: Tensor):
         '''

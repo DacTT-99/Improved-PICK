@@ -33,17 +33,17 @@ class PICKModel(nn.Module):
         encoder_module['args']['transformer']['args']['TransformerEncoderLayer']['args']['d_model'] = embedding_module['embedding_dim']
         self.encoder = getattr(encoder,encoder_module['type'])(encoder_module['args'])
 
-        graph_module['in_dim'] = encoder_module['out_dim']
-        graph_module['out_dim'] = encoder_module['out_dim']
+        graph_module['args']['graph_learning']['args']['in_dim'] = encoder_module['out_dim']
+        graph_module['args']['graph_convolution']['args']['out_dim'] = encoder_module['out_dim']
         self.graph = getattr(graph,graph_module['type'])(graph_module['args'])
 
-        decoder_module['bilstm_module']['input_size'] = encoder_module['out_dim']
-        if decoder_module['bilstm_module']['bidirectional']:
-            decoder_module['mlp_module']['in_dim'] = decoder_module['bilstm_module']['hidden_size'] * 2
+        decoder_module['args']['bilstm']['args']['input_size'] = encoder_module['args']['transformer']['args']['TransformerEncoderLayer']['args']['d_model']
+        if decoder_module['args']['bilstm']['args']['bidirectional']:
+            decoder_module['args']['mlp']['args']['in_dim'] = decoder_module['args']['bilstm']['args']['hidden_size'] * 2
         else:
-            decoder_module['mlp_module']['in_dim'] = decoder_module['bilstm_module']['hidden_size']
-        decoder_module['mlp_module']['out_dim'] = len(iob_labels_vocab_cls)
-        decoder_module['crf_module']['num_tags'] = len(iob_labels_vocab_cls)
+            decoder_module['args']['mlp']['args']['in_dim'] = decoder_module['args']['bilstm_module']['args']['hidden_size']
+        decoder_module['args']['mlp']['args']['out_dim'] = len(iob_labels_vocab_cls)
+        decoder_module['args']['crf']['args']['num_tags'] = len(iob_labels_vocab_cls)
         self.decoder = getattr(decoder,decoder_module['type'])(decoder_module['args'])
 
     def _aggregate_avg_pooling(self, input, text_mask):

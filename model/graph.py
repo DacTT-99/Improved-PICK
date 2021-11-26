@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Author: Wenwen Yu
-# @Created Time: 7/7/2020 8:34 PM
-
 from typing import *
 import math
 
@@ -12,8 +8,158 @@ import torch.nn.functional as F
 
 from data_utils import documents
 
-
 class GraphLearningLayer(nn.Module):
+    def __init__(self, in_dim: int, learning_dim: int, gamma: float, eta: float):
+        super().__init__()
+        self.projection = nn.Linear(in_dim, learning_dim, bias=False)
+        self.learn_w = nn.Parameter(torch.empty(learning_dim))
+        self.gamma = gamma
+        self.eta = eta
+        self.inint_parameters()
+
+    def inint_parameters(self):
+        nn.init.uniform_(self.learn_w, a=0, b=1)
+
+    def forward(self, x: Tensor, adj: Tensor, box_num: Tensor = None):
+        '''
+        :param x: nodes set, (B*N, D)
+        :param adj: init adj, (B, N, N, default is 1)
+        :param box_num: (B, 1)
+        :return:
+                out, soft adj matrix
+                gl loss
+        '''
+        B, N, D = x.shape
+
+        # (B, N, D)
+        x_hat = self.projection(x)
+        _, _, learning_dim = x_hat.shape
+
+        # (B, N, N, learning_dim)
+        x_i = x_hat.unsqueeze(2).expand(B, N, N, learning_dim)
+        x_j = x_hat.unsqueeze(1).expand(B, N, N, learning_dim)
+        # (B, N, N, learning_dim)
+        distance = torch.abs(x_i - x_j)
+
+        # add -1 flag to distance, if node is not exist. to separate normal node distances from not exist node distance.
+        if box_num is not None:
+            # mask = self.compute_static_mask(box_num)
+            mask = self.compute_dynamic_mask(box_num)
+            distance = distance + mask
+
+        # (B, N, N)
+        distance = torch.einsum('bijd, d->bij', distance, self.learn_w)
+        out = F.leaky_relu(distance)
+
+        # for numerical stability, due to softmax operation mable produce large value
+        max_out_v, _ = out.max(dim=-1, keepdim=True)
+        out = out - max_out_v
+
+        soft_adj = torch.exp(out)
+        soft_adj = adj * soft_adj
+
+        sum_out = soft_adj.sum(dim=-1, keepdim=True)
+        soft_adj = soft_adj / sum_out + 1e-10
+
+        gl_loss = None
+        if self.training:
+            gl_loss = self._graph_learning_loss(x_hat, soft_adj, box_num)
+
+        return soft_adj, gl_loss
+
+    @staticmethod
+    def compute_static_mask(box_num: Tensor):
+        '''
+        compute -1 mask, if node(box) is not exist, the length of mask is documents.MAX_BOXES_NUM,
+        this will help with one nodes multi gpus training mechanism, and ensure batch shape is same. but this operation
+        lead to waste memory.
+        :param box_num: (B, 1)
+        :return: (B, N, N, 1)
+        '''
+        max_len = documents.MAX_BOXES_NUM
+
+        # (B, N)
+        mask = torch.arange(0, max_len, device=box_num.device).expand((box_num.shape[0], max_len))
+
+        # (B, N)
+        box_num = box_num.expand_as(mask)
+        mask = mask < box_num
+
+        # (B, 1, N)
+        row_mask = mask.unsqueeze(1)
+
+        # (B, N, 1)
+        column_mask = mask.unsqueeze(2)
+
+        # (B, N, N)
+        mask = (row_mask & column_mask)
+
+        # -1 if not exist node, or 0
+        mask = ~mask * -1
+
+        return mask.unsqueeze(-1)
+
+    @staticmethod
+    def compute_dynamic_mask(box_num: Tensor):
+        '''
+        compute -1 mask, if node(box) is not exist, the length of mask is calculate by max(box_num),
+        this will help with multi nodes multi gpus training mechanism, ensure batch of different gpus have same shape.
+        :param box_num: (B, 1)
+        :return: (B, N, N, 1)
+        '''
+        max_len = torch.max(box_num)
+
+        # (B, N)
+        mask = torch.arange(0, max_len, device=box_num.device).expand((box_num.shape[0], max_len))
+
+        # (B, N)
+        box_num = box_num.expand_as(mask)
+        mask = mask < box_num
+
+        # (B, 1, N)
+        row_mask = mask.unsqueeze(1)
+
+        # (B, N, 1)
+        column_mask = mask.unsqueeze(2)
+
+        # (B, N, N)
+        mask = (row_mask & column_mask)
+
+        # -1 if not exist node, or 0
+        mask = ~mask * -1
+
+        return mask.unsqueeze(-1)
+
+    def _graph_learning_loss(self, x_hat: Tensor, adj: Tensor, box_num: Tensor):
+        '''
+        calculate graph learning loss
+        :param x_hat: (B, N, D)
+        :param adj: (B, N, N)
+        :param box_num: (B, 1)
+        :return:
+            gl_loss
+        '''
+
+        B, N, D = x_hat.shape
+        # (B, N, N, out_dim)
+        x_i = x_hat.unsqueeze(2).expand(B, N, N, D)
+        x_j = x_hat.unsqueeze(1).expand(B, N, N, D)
+
+        # (B, 1)
+        box_num_div = 1 / torch.pow(box_num.float(), 2)
+
+        # (B, N, N)
+        dist_loss = adj + self.eta * torch.norm(x_i - x_j, dim=3) # remove square operation duo to it can cause nan loss.
+        dist_loss = torch.exp(dist_loss)
+        # (B,)
+        dist_loss = torch.sum(dist_loss, dim=(1, 2)) * box_num_div.squeeze(-1)
+        # (B,)
+        f_norm = torch.norm(adj, dim=(1, 2)) # remove square operation duo to it can cause nan loss.
+
+        gl_loss = dist_loss + self.gamma * f_norm
+        return gl_loss
+
+class GraphLearningLayer_v2(nn.Module):
     def __init__(self, in_dim: int, n_heads: 4, gamma: float, eta: float):
         super().__init__()
         self.projection = nn.Linear(in_dim, in_dim, bias=False)
@@ -257,34 +403,38 @@ class GCNLayer(nn.Module):
 class GLCN(nn.Module):
 
     def __init__(self,
-                 in_dim: int,
-                 out_dim: int,
-                 gamma: float = 0.0001,
-                 eta: float = 1,
-                 n_heads: int = 4,
-                 num_layers=2):
-        '''
-        perform graph learning and multi-time graph convolution operation
-        :param in_dim:
-        :param out_dim:
-        :param gamma:
-        :param eta:
-        :param n_heads:
-        :param num_layers:
-        '''
+                 graph_learning:dict,
+                 graph_convolution:dict,
+                 num_layers:int = 4):
+        """
+        Graph Learning Convolution Network
+
+        Parameters
+        ----------
+        graph_learning : dict
+            graph_learning kwargs
+        graph_convolution : dict
+            graph_convolution kwargs
+        num_layers : int, optional
+            num layers of graph convolution layers, by default 4
+        """
         super().__init__()
 
-        self.gl_layer = GraphLearningLayer(in_dim=in_dim,n_heads =n_heads, gamma=gamma, eta=eta)
+        if graph_learning['type'] == 'GraphLearningLayer':
+            self.gl_layer = GraphLearningLayer(graph_learning['args'])
+        else:
+            self.gl_layer = GraphLearningLayer_v2(graph_learning['args'])
+
         modules = []
-        in_dim_cur = in_dim
+        in_dim_cur = graph_learning['args']['in_dim']
         for i in range(num_layers):
-            m = GCNLayer(in_dim_cur, out_dim)
+            m = GCNLayer(in_dim_cur, graph_convolution['args'])
             in_dim_cur = out_dim
             out_dim = in_dim_cur
             modules.append(m)
         self.gcn = nn.ModuleList(modules)
 
-        self.alpha_transform = nn.Linear(6, in_dim, bias=False)
+        self.alpha_transform = nn.Linear(6, graph_learning['args']['in_dim'], bias=False)
 
     def forward(self, x: Tensor, rel_features: Tensor, adj: Tensor, box_num: Tensor, **kwargs):
         '''
