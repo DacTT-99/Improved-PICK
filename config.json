@@ -106,7 +106,7 @@
             "images_folder":"images",
             "entities_folder":"entities",
             "iob_tagging_type":"box_and_within_box_level",
-            "resized_image_size": [480, 960],
+            "resized_image_segment_size": [32, 1024],
             "ignore_error": false
         }
     },
@@ -118,7 +118,7 @@
             "images_folder":"images",
             "entities_folder":"entities",
             "iob_tagging_type":"box_and_within_box_level",
-            "resized_image_size": [480, 960],
+            "resized_image_segment_size": [32, 1024],
             "ignore_error": false
         }
     },

@@ -22,13 +22,13 @@ from utils.class_utils import keys_vocab_cls, iob_labels_vocab_cls, entities_voc
 
 class PICKDataset(Dataset):
 
-    def __init__(self, files_name: str = None,
+    def __init__(self,
+                 files_name: str = None,
                  boxes_and_transcripts_folder: str = 'boxes_and_transcripts',
                  images_folder: str = 'images',
                  entities_folder: str = 'entities',
                  iob_tagging_type: str = 'box_and_within_box_level',
-                 resized_image_size: Tuple[int, int] = (480, 960),
-                 keep_ratio: bool = True,
+                 resized_image_segment_size: list = [32,1024],
                  ignore_error: bool = False,
                  training: bool = True
                  ):
@@ -49,9 +49,9 @@ class PICKDataset(Dataset):
         self._image_ext = None
         self._ann_ext = None
         self.iob_tagging_type = iob_tagging_type
-        self.keep_ratio = keep_ratio
         self.ignore_error = ignore_error
         self.training = training
+        self.segment_size = resized_image_segment_size
 
         if self.training:  # used for train and validation mode
             self.files_name = Path(files_name)
@@ -123,13 +123,11 @@ class PICKDataset(Dataset):
                 raise RuntimeError('Sample: {} not exist.'.format(boxes_and_transcripts_file.stem))
 
         try:
-            # TODO add read and save cache function, to speed up data loaders
-
             if self.training:
-                document = documents.Document(boxes_and_transcripts_file, image_file, 32,1024,
-                                              self.iob_tagging_type, entities_file, training=self.training)
+                document = documents.Document(boxes_and_transcripts_file, image_file, entities_file, self.segment_size,
+                                              self.iob_tagging_type, training=self.training)
             else:
-                document = documents.Document(boxes_and_transcripts_file, image_file, 32,1024,
+                document = documents.Document(boxes_and_transcripts_file, image_file, entities_file, self.segment_size,
                                               image_index=index, training=self.training)
             return document
         except Exception as e:
@@ -218,7 +216,6 @@ class BatchCollateFn(object):
                                                 value=iob_labels_vocab_cls.stoi['<pad>'])
                                           for i, x in enumerate(batch_list)]
             iob_tags_label_batch_tensor = torch.stack(iob_tags_label_padded_list, dim=0)
-
         else:
             # (B,)
             image_indexes_list = [x.image_index for x in batch_list]

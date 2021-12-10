@@ -25,14 +25,12 @@ IOBTagsField.vocab = iob_labels_vocab_cls
 
 
 class Document:
-    def __init__(self, 
+    def __init__(self,
                  boxes_and_transcripts_file: Path,
                  image_file: Path,
-                 #resized_image_size: Tuple[int, int] = (480, 960),
-                 segment_height: int = 64,
-                 segment_max_width: int = 1024,
-                 iob_tagging_type: str = 'box_level',
                  entities_file: Path = None,
+                 segment_size: list = [32, 1024],
+                 iob_tagging_type: str = 'box_level',
                  training: bool = True,
                  image_index=None):
         """
@@ -44,24 +42,19 @@ class Document:
             Gt or ocr results file
         image_file : Path
             Whole images file
-        resized_image_size : Tuple[int, int], optional
-            Resize whole image size, (w, h), by default (480, 960)
-        segment_height : int, optional
-            Height of resized image segments, by default 64
-        segment_max_width : int , optional
-            Maximum width of image segments, by default 1024
+        segment_size : list
+            Resize image segment according to the length of sentence, the longest corresponds to `segment_size`
         iob_tagging_type : str, optional
-            'box_level', 'document_level', 'box_and_within_box_level', by default 'box_level'
+            `box_level`, `document_level`, `box_and_within_box_level`, by default `box_level`
         entities_file : Path, optional
-            Exactly entity type and entity value of documents, json file, by default None
+            Exactly entity type and entity value of documents, json file, by default `None`
         training : bool, optional
-            True for train and validation mode, False for test mode. True will also load labels, and entities_file must be set., by default True
-        image_index : [type], optional
-            Image index, used to get image file name, by default None
+            `True` for train and validation mode, `False` for test mode. `True` will also load labels, and entities_file must be set., by default `True`
+        image_index : int, optional
+            Image index, used to get image file name, by default `None`
         """
-        #self.resized_image_size = resized_image_size
-        self.segment_height = segment_height
-        self.segment_max_width = segment_max_width
+        MAX_WIDTH = segment_size[1]
+        self.segment_size = segment_size
         self.training = training
         assert iob_tagging_type in ['box_level', 'document_level', 'box_and_within_box_level'], \
             'iob tagging type {} is not supported'.format(iob_tagging_type)
@@ -107,7 +100,8 @@ class Document:
 
         # Limit the number of boxes and number of transcripts to process.
         boxes_num = min(len(boxes), MAX_BOXES_NUM)
-        transcript_len = min(max([len(t) for t in transcripts[:boxes_num]]), MAX_TRANSCRIPT_LEN_GLOBAL)
+        transcript_len = min(max([len(t) for t in transcripts[:boxes_num]]),
+                             MAX_TRANSCRIPT_LEN_GLOBAL)
         mask = np.zeros((boxes_num, transcript_len), dtype=int)
 
         relation_features = np.zeros((boxes_num, boxes_num, 6))
@@ -121,7 +115,8 @@ class Document:
             #y_scale = self.resized_image_size[1] / height
 
             # get min area box for each (original) boxes, for calculate initial relation features
-            min_area_boxes = [cv2.minAreaRect(np.array(box, dtype=np.float32).reshape(4, 2)) for box in boxes[:boxes_num]]
+            min_area_boxes = [cv2.minAreaRect(np.array(box, dtype=np.float32).reshape(4, 2))
+                              for box in boxes[:boxes_num]]
 
             # calculate resized image box coordinate, and initial relation features between boxes (nodes)
             resized_boxes = []
@@ -152,7 +147,13 @@ class Document:
             texts_len = np.clip(texts_len.numpy(), 0, transcript_len)
             text_segments = (texts, texts_len)
 
-            image_segments,segment_width = crop_image_segments(image,boxes,boxes_num,self.segment_height,self.segment_max_width,texts_len,transcript_len,MAX_TRANSCRIPT_LEN_GLOBAL)
+            image_segments, segment_width = crop_image_segments(image,
+                                                                boxes,
+                                                                boxes_num,
+                                                                self.segment_size,
+                                                                texts_len,
+                                                                transcript_len, 
+                                                                MAX_TRANSCRIPT_LEN_GLOBAL)
             self.segment_width = segment_width
 
             if self.training:
@@ -198,7 +199,12 @@ class Document:
         except Exception as e:
             raise RuntimeError('Error occurs in image {}: {}'.format(boxes_and_transcripts_file.stem, e.args))
 
-    def relation_features_between_ij_nodes(self, boxes_num, i, min_area_boxes, relation_features, transcript_i,
+    def relation_features_between_ij_nodes(self, 
+                                           boxes_num, 
+                                           i, 
+                                           min_area_boxes, 
+                                           relation_features, 
+                                           transcript_i,
                                            transcripts):
         '''
         calculate node i and other nodes' initial relation features.
@@ -301,7 +307,6 @@ def sort_box_with_list(data: List[Tuple], left_right_first=False):
 
 
 def normalize_relation_features(feat: np.ndarray, width: int, height: int):
-    # TODO check _NoValueType value (None)
     np.clip(feat, 1e-8, np.inf)
     feat[:, :, 0] = feat[:, :, 0] / width
     feat[:, :, 1] = feat[:, :, 1] / height
@@ -316,13 +321,23 @@ def normalize_relation_features(feat: np.ndarray, width: int, height: int):
     return feat
 
 
-def text2iob_label_with_box_level_match(annotation_box_types: List[str], transcripts: List[str]) -> List[List[str]]:
-    '''
-     convert transcripts to iob label using box level tagging match method
-    :param annotation_box_types: each transcripts box belongs to the corresponding entity types
-    :param transcripts: transcripts of documents
-    :return:
-    '''
+def text2iob_label_with_box_level_match(annotation_box_types: List[str],
+                                        transcripts: List[str]
+                                        ) -> List[List[str]]:
+    """
+    convert transcripts to iob label using box level tagging match method
+
+    Parameters
+    ----------
+    annotation_box_types : List[str]
+        each transcripts box belongs to the corresponding entity types
+    transcripts : List[str]
+        transcripts of documents
+
+    Returns
+    -------
+    List[List[str]]
+    """
     tags = []
     for entity_type, transcript in zip(annotation_box_types, transcripts):
         if entity_type in Entities_list:
@@ -338,8 +353,9 @@ def text2iob_label_with_box_level_match(annotation_box_types: List[str], transcr
     return tags
 
 
-def text2iob_label_with_document_level_exactly_match(transcripts: List[str], exactly_entities_label: Dict) -> List[
-    List[str]]:
+def text2iob_label_with_document_level_exactly_match(transcripts: List[str],
+                                                     exactly_entities_label: Dict
+                                                     ) -> List[List[str]]:
     '''
      convert transcripts to iob label using document level tagging match method,
      all transcripts will be concatenated as a sequences.
@@ -382,7 +398,8 @@ def text2iob_label_with_document_level_exactly_match(transcripts: List[str], exa
 def text2iob_label_with_box_and_within_box_exactly_level(annotation_box_types: List[str],
                                                          transcripts: List[str],
                                                          exactly_entities_label: Dict[str, str],
-                                                         box_level_entities: List[str]) -> List[List[str]]:
+                                                         box_level_entities: List[str]
+                                                         ) -> List[List[str]]:
     '''
      box_level_entities will perform box level tagging, others will perform exactly matching within specific box.
     :param annotation_box_types: each transcripts box belongs to the corresponding entity types
@@ -458,7 +475,14 @@ def preprocess_transcripts(transcripts: List[str]):
             idx.append(index)
     return seq, idx
 
-def crop_image_segments(image,boxes,boxes_num,height,max_width,text_lengths,max_transcript_length,max_transcript_length_global)->list:
+def crop_image_segments(image, 
+                        boxes: List[int], 
+                        boxes_num: int, 
+                        segment_size: Tuple[int, int], 
+                        text_lengths: List[int], 
+                        max_transcript_length: int, 
+                        max_transcript_length_global:int
+                        )->list:
     """ 
     Crop all image segments in provied image according the boxes coordinates 
     then resize and padding image segments under text length constrain
@@ -471,37 +495,36 @@ def crop_image_segments(image,boxes,boxes_num,height,max_width,text_lengths,max_
         boxes coordinates format (x1,y1,x2,y2,x3,y3,x4,y4)
     boxes_num : int
         number of boxes
-    height : int
-        height of resized image
-    max_width : int
-        max_width of resized image
+    segment_size: Tuple[int, int]
+        resize of segment
     text_lengths list[int]
         lengths of text segments
     max_transcript_length : int
         max length of text segments in image
     max_transcript_length_global : int
         max length of text segment in all images
+
     Return
     ------
     List of image segments
     """
     segments = []
-    padding_width = int(max_width * max_transcript_length / max_transcript_length_global)
-    scale = max_width / max_transcript_length_global
+    padding_width = int(segment_size[1] * max_transcript_length / max_transcript_length_global)
+    scale = segment_size[1] / max_transcript_length_global
     for i in range(0,boxes_num):
         segment = crop_rotation_rect(image,boxes[i])
         text_length = text_lengths[i]
         resize_width = int(text_length * scale)
-        segment = cv2.resize(segment,(resize_width,height))
+        segment = cv2.resize(segment,(resize_width,segment_size[0]))
 
         #paddding
         h,w,_ = segment.shape
-        padding = np.full((height,padding_width,3),(0,0,0),dtype=np.float32)
+        padding = np.full((segment_size[0],padding_width,3),(0,0,0),dtype=np.float32)
         padding[:h,:w] = segment
         segments.append(padding)
     return segments,padding_width
 
-def crop_rotation_rect(image,box):
+def crop_rotation_rect(image,box: List[int]):
     """
     Crop a minimum rotated rectangle cover the box
 
@@ -539,7 +562,6 @@ def crop_rotation_rect(image,box):
     
     # the perspective transformation matrix
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
-
     # directly warp the rotated rectangle to get the straightened rectangle
     segment = cv2.warpPerspective(image, M, (height, width))
 
