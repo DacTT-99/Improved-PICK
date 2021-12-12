@@ -23,8 +23,218 @@ TextSegmentsField.vocab = keys_vocab_cls
 IOBTagsField = Field(sequential=True, is_target=True, use_vocab=True, batch_first=True)
 IOBTagsField.vocab = iob_labels_vocab_cls
 
-
 class Document:
+    def __init__(self, 
+                 boxes_and_transcripts_file: Path,
+                 image_file: Path,
+                 resized_image_size: Tuple[int, int] = (480, 960),
+                 iob_tagging_type: str = 'box_level',
+                 entities_file: Path = None,
+                 training: bool = True,
+                 image_index=None):
+        """
+        An item returned by dataset
+
+        Parameters
+        ----------
+        boxes_and_transcripts_file : `Path`
+            Gt or ocr results file
+        image_file : `Path`
+            Whole images file
+        resized_image_size : `Tuple[int, int]`
+            Resize image
+        iob_tagging_type : `str`, optional
+            `box_level`, `document_level`, `box_and_within_box_level`, by default `box_level`
+        entities_file : `Path`, optional
+            Exactly entity type and entity value of documents, json file, by default `None`
+        training : `bool`, optional
+            `True` for train and validation mode, `False` for test mode. `True` will also load labels, and entities_file must be set., by default `True`
+        image_index : `int`, optional
+            Image index, used to get image file name, by default `None`
+        """
+        self.resized_image_size = resized_image_size
+        self.training = training
+        assert iob_tagging_type in ['box_level', 'document_level', 'box_and_within_box_level'], \
+            'iob tagging type {} is not supported'.format(iob_tagging_type)
+        self.iob_tagging_type = iob_tagging_type
+
+        # For easier debug:
+        # we will know what we are running on.
+        self.image_filename = image_file.as_posix()
+
+        try:
+            # read boxes, transcripts, and entity types of boxes in one documents from boxes_and_transcripts file
+            # match with regex pattern: index,x1,y1,x2,y2,x3,y3,x4,y4,transcript,type from boxes_and_transcripts tsv file
+            # data format as [(index, points, transcription, entity_type)...]
+            if self.training:
+                # boxes_and_transcripts_data = [(index, [x1, y1, ...], transcript, entity_type), ...]
+                boxes_and_transcripts_data = read_gt_file_with_box_entity_type(boxes_and_transcripts_file.as_posix())
+            else:
+                boxes_and_transcripts_data = read_ocr_file_without_box_entity_type(
+                    boxes_and_transcripts_file.as_posix())
+
+            # Sort the box based on the position.
+            boxes_and_transcripts_data = sort_box_with_list(boxes_and_transcripts_data)
+
+            # read image
+            image = cv2.imread(image_file.as_posix())
+        except Exception as e:
+            raise IOError('Error occurs in image {}: {}'.format(image_file.stem, e.args))
+
+        boxes, transcripts, box_entity_types = [], [], []
+        if self.training:
+            for index, points, transcript, entity_type in boxes_and_transcripts_data:
+                if len(transcript) == 0:
+                    transcript = ' '
+                boxes.append(points)
+                transcripts.append(transcript)
+                box_entity_types.append(entity_type)
+        else:
+            for index, points, transcript in boxes_and_transcripts_data:
+                if len(transcript) == 0:
+                    transcript = ' '
+                boxes.append(points)
+                transcripts.append(transcript)
+
+        # Limit the number of boxes and number of transcripts to process.
+        boxes_num = min(len(boxes), MAX_BOXES_NUM)
+        transcript_len = min(max([len(t) for t in transcripts[:boxes_num]]), MAX_TRANSCRIPT_LEN_GLOBAL)
+        mask = np.zeros((boxes_num, transcript_len), dtype=int)
+
+        relation_features = np.zeros((boxes_num, boxes_num, 6))
+
+        try:
+
+            height, width, _ = image.shape
+
+            # resize image
+            image = cv2.resize(image, self.resized_image_size, interpolation=cv2.INTER_LINEAR)
+            x_scale = self.resized_image_size[0] / width
+            y_scale = self.resized_image_size[1] / height
+
+            # get min area box for each (original) boxes, for calculate initial relation features
+            min_area_boxes = [cv2.minAreaRect(np.array(box, dtype=np.float32).reshape(4, 2)) for box in
+                              boxes[:boxes_num]]
+
+            # calculate resized image box coordinate, and initial relation features between boxes (nodes)
+            resized_boxes = []
+            for i in range(boxes_num):
+                box_i = boxes[i]
+                transcript_i = transcripts[i]
+
+                # get resized images's boxes coordinate, used to ROIAlign in Encoder layer
+                resized_box_i = [int(np.round(pos * x_scale)) if i % 2 == 0 else int(np.round(pos * y_scale))
+                                 for i, pos in enumerate(box_i)]
+
+                resized_rect_output_i = cv2.minAreaRect(np.array(resized_box_i, dtype=np.float32).reshape(4, 2))
+                resized_box_i = cv2.boxPoints(resized_rect_output_i)
+                resized_box_i = resized_box_i.reshape((8,))
+                resized_boxes.append(resized_box_i)
+
+                # enumerate each box, calculate relation features between i and other nodes.
+                # formula (9)
+                self.relation_features_between_ij_nodes(boxes_num, i, min_area_boxes, relation_features, transcript_i,
+                                                        transcripts)
+
+            relation_features = normalize_relation_features(relation_features, width=width, height=height)
+            # The length of texts of each segment.
+            text_segments = [list(trans) for trans in transcripts[:boxes_num]]
+
+            if self.training:
+                # assign iob label to input text through exactly match way, this process needs entity-level label
+                if self.iob_tagging_type != 'box_level':
+                    with entities_file.open() as f:
+                        entities = json.load(f)
+
+                if self.iob_tagging_type == 'box_level':
+                    # convert transcript of every boxes to iob label, using entity type of corresponding box
+                    iob_tags_label = text2iob_label_with_box_level_match(box_entity_types[:boxes_num],
+                                                                         transcripts[:boxes_num])
+                elif self.iob_tagging_type == 'document_level':
+                    # convert transcripts to iob label using document level tagging match method, all transcripts will
+                    # be concatenated as a sequences
+                    iob_tags_label = text2iob_label_with_document_level_exactly_match(transcripts[:boxes_num], entities)
+
+                elif self.iob_tagging_type == 'box_and_within_box_level':
+                    # perform exactly tagging within specific box, box_level_entities parames will perform boex level tagging.
+                    iob_tags_label = text2iob_label_with_box_and_within_box_exactly_level(box_entity_types[:boxes_num],
+                                                                                          transcripts[:boxes_num],
+                                                                                          entities, ['address'])
+
+                iob_tags_label = IOBTagsField.process(iob_tags_label)[:, :transcript_len].numpy()
+                box_entity_types = [entities_vocab_cls.stoi[t] for t in box_entity_types[:boxes_num]]
+
+            # texts shape is (num_texts, max_texts_len), texts_len shape is (num_texts,)
+            texts, texts_len = TextSegmentsField.process(text_segments)
+            texts = texts[:, :transcript_len].numpy()
+            texts_len = np.clip(texts_len.numpy(), 0, transcript_len)
+            text_segments = (texts, texts_len)
+
+            for i in range(boxes_num):
+                mask[i, :texts_len[i]] = 1
+
+            self.whole_image = RawField().preprocess(image)
+            self.text_segments = TextSegmentsField.preprocess(text_segments)  # (text, texts_len)
+            self.boxes_coordinate = RawField().preprocess(resized_boxes)
+            self.relation_features = RawField().preprocess(relation_features)
+            self.mask = RawField().preprocess(mask)
+            self.boxes_num = RawField().preprocess(boxes_num)
+            self.transcript_len = RawField().preprocess(transcript_len)  # max transcript len of current document
+            if self.training:
+                self.iob_tags_label = IOBTagsField.preprocess(iob_tags_label)
+            else:
+                self.image_index = RawField().preprocess(image_index)
+
+        except Exception as e:
+            raise RuntimeError('Error occurs in image {}: {}'.format(boxes_and_transcripts_file.stem, e.args))
+
+    def relation_features_between_ij_nodes(self, boxes_num, i, min_area_boxes, relation_features, transcript_i,
+                                           transcripts):
+        '''
+        calculate node i and other nodes' initial relation features.
+        :param boxes_num:
+        :param i:
+        :param min_area_boxes: the min rectangle of (original) points.
+        :param relation_features: np.array, boxes_num x boxes_num x 6
+        :param transcript_i:  transcripts[i]
+        :param transcripts:
+        :return:
+        '''
+        for j in range(boxes_num):
+            transcript_j = transcripts[j]
+
+            rect_output_i = min_area_boxes[i]
+            rect_output_j = min_area_boxes[j]
+
+            # Centers of rect_of_box_i and rect_of_box_j.
+            center_i = rect_output_i[0]
+            center_j = rect_output_j[0]
+
+            width_i, height_i = rect_output_i[1]
+            width_j, height_j = rect_output_j[1]
+
+            # Center distances of boxes on x-axis.
+            relation_features[i, j, 0] = np.abs(center_i[0] - center_j[0]) \
+                if np.abs(center_i[0] - center_j[0]) is not None else -1  # x_ij
+
+            # Center distances of boxes on y-axis.
+            relation_features[i, j, 1] = np.abs(center_i[1] - center_j[1]) \
+                if np.abs(center_i[1] - center_j[1]) is not None else -1  # y_ij
+
+            relation_features[i, j, 2] = width_i / (height_i) \
+                if height_i != 0 and width_i / (height_i) is not None else -1  # w_i/h_i
+
+            relation_features[i, j, 3] = height_j / (height_i) \
+                if height_i != 0 and height_j / (height_i) is not None else -1  # h_j/h_i
+
+            relation_features[i, j, 4] = width_j / (height_i) \
+                if height_i != 0 and width_j / (height_i) is not None else -1  # w_j/h_i
+
+            relation_features[i, j, 5] = len(transcript_j) / (len(transcript_i)) \
+                if len(transcript_j) / (len(transcript_i)) is not None else -1  # T_j/T_i
+
+
+class Document_v2:
     def __init__(self,
                  boxes_and_transcripts_file: Path,
                  image_file: Path,

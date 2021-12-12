@@ -15,9 +15,9 @@ class Encoder(nn.Module):
                 image_encoder: dict,
                  transformer: dict,
                  dropout: float = 0.1,
-                 max_len: int = 100,
                  roi_pooling_mode: str = 'roi_align',
-                 roi_pooling_size: Tuple[int, int] = (7, 7)):
+                 roi_pooling_size: Tuple[int, int] = (7, 7),
+                 max_len: int = 100):
         """
         Convert image segments and text segments to node embedding.
 
@@ -51,11 +51,11 @@ class Encoder(nn.Module):
         out_dim = transformer_layer['args']['d_model']
         image_feature_dim = image_encoder['args']['output_channels']
 
-        transformer_encoder_layer = getattr(nn,transformer_layer['type'])(transformer_layer['args'])
+        transformer_encoder_layer = getattr(nn,transformer_layer['type'])(**transformer_layer['args'])
         self.transformer_encoder = nn.TransformerEncoder(transformer_encoder_layer,num_layers=transformer['args']['num_layers'])
 
         try:
-            self.cnn = getattr(resnet,image_encoder['type'])(image_encoder['args'])
+            self.cnn = getattr(resnet,image_encoder['type'])(**image_encoder['args'])
         except:
             raise NotImplementedError()
 
@@ -189,7 +189,7 @@ class Encoder_v2(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(transformer_encoder_layer,num_layers=transformer['args']['num_layers'])
 
         try:
-            self.cnn = getattr(resnet,image_encoder['type'])(image_encoder['args'])
+            self.cnn = getattr(resnet,image_encoder['type'])(**image_encoder['args'])
         except:
             raise NotImplementedError()
 

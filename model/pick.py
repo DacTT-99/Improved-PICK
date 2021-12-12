@@ -35,7 +35,7 @@ class PICKModel(nn.Module):
         graph_module['args']['graph_convolution']['args']['out_dim'] = encoder_module['args']['image_encoder']['args']['output_channels']
         self.graph = getattr(graph,graph_module['type'])(**graph_module['args'])
 
-        decoder_module['args']['bilstm']['args']['input_size'] = encoder_module['args']['transformer']['args']['TransformerEncoderLayer']['args']['d_model']
+        decoder_module['args']['bilstm']['args']['input_size'] = encoder_module['args']['transformer']['args']['transformer_layer']['args']['d_model']
         if decoder_module['args']['bilstm']['args']['bidirectional']:
             decoder_module['args']['mlp']['args']['in_dim'] = decoder_module['args']['bilstm']['args']['hidden_size'] * 2
         else:

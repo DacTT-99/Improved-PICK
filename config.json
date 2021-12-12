@@ -48,7 +48,7 @@
                 "type":"GLCN",
                 "args":{
                     "graph_learning":{
-                        "type":"GraphLearningLayer",
+                        "type":"GraphLearningLayer_v2",
                         "args":{
                             "in_dim":-1,
                             "gamma": 1,
@@ -99,9 +99,9 @@
     },
 
     "train_dataset": {
-        "type": "PICKDataset",
+        "type": "PICKDataset_v2",
         "args": {
-            "files_name":"",
+            "files_name":"/content/CORD_formatted/train_data_CORD/train_data_list.csv",
             "boxes_and_transcripts_folder":"boxes_and_transcripts",
             "images_folder":"images",
             "entities_folder":"entities",
@@ -111,9 +111,9 @@
         }
     },
     "validation_dataset": {
-        "type": "PICKDataset",
+        "type": "PICKDataset_v2",
         "args": {
-            "files_name":"",
+            "files_name":"/content/CORD_formatted/valid_data_CORD/valid_data_list.csv",
             "boxes_and_transcripts_folder":"boxes_and_transcripts",
             "images_folder":"images",
             "entities_folder":"entities",
