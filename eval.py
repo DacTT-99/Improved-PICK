@@ -101,7 +101,7 @@ def eval(args):
     confusion_matrix = torch.flip(confusion_matrix, [1])
     tag = [iob_labels_vocab_cls.itos[x].split('-')[1] for x in range(num_classes)]
     tag.append('other')
-    df_cm = pd.DataFrame(confusion_matrix.numpy()(),
+    df_cm = pd.DataFrame(confusion_matrix.numpy(),
                          index=[i for i in tag],
                          columns=[i for i in reversed(tag)])
     plt.figure(figsize=(5, 4))
