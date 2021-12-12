@@ -13,7 +13,7 @@ from allennlp.data.dataset_readers.dataset_utils.span_utils import bio_tags_to_s
 from parse_config import ConfigParser
 import model.pick as pick_arch_module
 from data_utils.pick_dataset import PICKDataset
-from data_utils.pick_dataset import BatchCollateFn
+from data_utils.pick_dataset import BatchCollateFn, BatchCollateFn_v2
 from utils.util import iob_index_to_str, text_index_to_str
 from utils.class_utils import iob_labels_vocab_cls
 

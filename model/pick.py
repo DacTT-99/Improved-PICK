@@ -86,7 +86,10 @@ class PICKModel(nn.Module):
 
     def forward(self, **kwargs):
         # input
-        image_segments = kwargs['image_segments']  # (B, 3, H, W)
+        if 'image_segments' in kwargs.keys():
+            image = kwargs['image_segments']  # (B, 3, H, W)
+        elif 'whole_image' in kwargs.keys():
+            image = kwargs['whole_image']
         relation_features = kwargs['relation_features']  # initial relation embedding (B, N, N, 6)
         text_segments = kwargs['text_segments']  # text segments (B, N, T)
         text_length = kwargs['text_length']  # (B, N)
@@ -104,8 +107,15 @@ class PICKModel(nn.Module):
         src_key_padding_mask, graph_node_mask = self.compute_mask(mask)
 
         # set of nodes, (B*N, T, D)
-        x = self.encoder(images_segments=image_segments, transcripts=text_emb, src_key_padding_mask=src_key_padding_mask)
-
+        if isinstance(self.encoder,encoder.Encoder_v2):
+            x = self.encoder(images_segments=image,
+                             transcripts=text_emb,
+                             src_key_padding_mask=src_key_padding_mask)
+        else:
+            x = self.encoder(images=image,
+                             boxes_coordinate=boxes_coordinate,
+                             transcripts=text_emb,
+                             src_key_padding_mask=src_key_padding_mask)
         ### Graph module ###
         # text_mask, True for valid, (including all not valid node), (B*N, T)
         text_mask = torch.logical_not(src_key_padding_mask).byte()

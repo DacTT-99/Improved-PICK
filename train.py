@@ -14,7 +14,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import model.pick as pick_arch_module
 from data_utils import pick_dataset as pick_dataset_module
 
-from data_utils.pick_dataset import BatchCollateFn
+from data_utils.pick_dataset import BatchCollateFn,BatchCollateFn_v2
 from parse_config import ConfigParser
 from trainer import Trainer
 
@@ -34,18 +34,21 @@ def main(config: ConfigParser, local_master: bool, logger=None):
     train_dataset = config.init_obj(['train_dataset'], pick_dataset_module)
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) \
         if config['distributed'] else None
-
+    if 'v2' in config['train_dataset']['type']:
+        colector = BatchCollateFn_v2()
+    else:
+        colector = BatchCollateFn()
     is_shuffle = False if config['distributed'] else True
     train_data_loader = config.init_obj(['train_data_loader'], torch.utils.data.dataloader,
                                         dataset=train_dataset,
                                         sampler=train_sampler,
                                         shuffle=is_shuffle,
-                                        collate_fn=BatchCollateFn())
+                                        collate_fn=colector)
 
     val_dataset = config.init_obj(['validation_dataset'], pick_dataset_module)
     val_data_loader = config.init_obj(['val_data_loader'], torch.utils.data.dataloader,
                                       dataset=val_dataset,
-                                      collate_fn=BatchCollateFn())
+                                      collate_fn=colector)
     logger.info(f'Dataloader instances created. Train datasets: {len(train_dataset)} samples '
                 f'Validation datasets: {len(val_dataset)} samples.') if local_master else None
 

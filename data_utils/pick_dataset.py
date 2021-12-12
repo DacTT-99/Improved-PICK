@@ -49,7 +49,6 @@ class PICKDataset(Dataset):
         self._image_ext = None
         self._ann_ext = None
         self.iob_tagging_type = iob_tagging_type
-        self.keep_ratio = keep_ratio
         self.ignore_error = ignore_error
         self.training = training
         assert resized_image_size and len(resized_image_size) == 2, 'resized image size not be set.'

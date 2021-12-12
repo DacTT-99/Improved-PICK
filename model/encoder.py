@@ -12,7 +12,7 @@ from . import resnet
 class Encoder(nn.Module):
 
     def __init__(self,
-                image_encoder: dict,
+                 image_encoder: dict,
                  transformer: dict,
                  dropout: float = 0.1,
                  roi_pooling_mode: str = 'roi_align',
@@ -78,7 +78,10 @@ class Encoder(nn.Module):
         self.pe_dropout = nn.Dropout(self.dropout)
         self.output_dropout = nn.Dropout(self.dropout)
 
-    def forward(self, images: torch.Tensor, boxes_coordinate: torch.Tensor, transcripts: torch.Tensor,
+    def forward(self, 
+                images: torch.Tensor, 
+                boxes_coordinate: torch.Tensor, 
+                transcripts: torch.Tensor,
                 src_key_padding_mask: torch.Tensor):
         '''
 
@@ -211,7 +214,10 @@ class Encoder_v2(nn.Module):
         self.pe_dropout = nn.Dropout(self.dropout)
         self.output_dropout = nn.Dropout(self.dropout)
 
-    def forward(self, images_segments: torch.Tensor, transcripts: torch.Tensor, src_key_padding_mask: torch.Tensor):
+    def forward(self, 
+                images_segments: torch.Tensor, 
+                transcripts: torch.Tensor, 
+                src_key_padding_mask: torch.Tensor):
         '''
         :param images: whole_images, shape is (B, N, H, W, C), where B is batch size, N is the number of segments of
                 the documents, H is height of image, W is width of image, C is channel of images (default is 3).

@@ -281,7 +281,7 @@ class Trainer:
         # {'loss': avg_loss, 'gl_loss': avg_gl_loss, 'crf_loss': avg_crf_loss}
         log = self.train_loss_metrics.result()
         self.writer.set_step(epoch, 'train')
-        self.writer.add_scalar('total_loss_epoch',log['loss'])
+        self.writer.add_scalar('loss_epoch',log['loss'])
         self.writer.add_scalar('gl_loss_epoch',log['gl_loss'])
         self.writer.add_scalar('crf_loss_epoch',log['crf_loss'])
         # do validation after training an epoch
@@ -289,14 +289,10 @@ class Trainer:
             val_result_dict = self._valid_epoch(epoch)
             log['val_result_dict'] = val_result_dict
             self.writer.set_step(epoch, 'valid')
-            self.writer.add_scalars('mEF_valid',{'total':val_result_dict['total']['mEF'],
-                                                 'date':val_result_dict['date']['mEF'],
-                                                 'company':val_result_dict['company']['mEF'],
-                                                 'address':val_result_dict['address']['mEF']})
-
-            # self.writer.add_scalars('mEF_valid',{'total':val_result_dict['total']['mEF'],
-            #                                      'product':val_result_dict['product']['mEF'],
-            #                                      'price':val_result_dict['price']['mEF']})
+            rs={}
+            for key in val_result_dict.keys():
+              rs[key] = val_result_dict[key]['mEF']
+            self.writer.add_scalars('mEF',rs)
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
