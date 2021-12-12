@@ -421,14 +421,15 @@ class GLCN(nn.Module):
         super().__init__()
 
         if graph_learning['type'] == 'GraphLearningLayer':
-            self.gl_layer = GraphLearningLayer(graph_learning['args'])
+            self.gl_layer = GraphLearningLayer(**graph_learning['args'])
         else:
-            self.gl_layer = GraphLearningLayer_v2(graph_learning['args'])
+            self.gl_layer = GraphLearningLayer_v2(**graph_learning['args'])
 
         modules = []
         in_dim_cur = graph_learning['args']['in_dim']
+        out_dim = graph_convolution['args']['out_dim']
         for i in range(num_layers):
-            m = GCNLayer(in_dim_cur, graph_convolution['args'])
+            m = GCNLayer(in_dim_cur, **graph_convolution['args'])
             in_dim_cur = out_dim
             out_dim = in_dim_cur
             modules.append(m)

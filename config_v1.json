@@ -1,0 +1,181 @@
+{
+    "name": "PICK_Default",
+    "run_id":"test",
+
+    "distributed":true,
+    "local_world_size":4,
+    "local_rank":-1,
+
+    "model_arch": {
+        "type": "PICKModel",
+        "args": {
+            "embedding":{
+                "type":"Embedding",
+                "args":{
+                    "num_embeddings": -1,
+                    "embedding_dim": 512
+                }
+            },
+            "encoder":{
+                "type":"Encoder",
+                "args":{
+                    "image_encoder":{
+                        "type":"resnet34",
+                        "args":{
+                            "pretrained":true,
+                            "output_channels":512
+                        }
+                    },
+                    "transformer":{
+                        "type":"TransformerEncoder",
+                        "args":{
+                            "transformer_layer":{
+                                "type":"TransformerEncoderLayer",
+                                "args":{
+                                    "d_model":-1,
+                                    "nhead":4,
+                                    "dim_feedforward":512,
+                                    "dropout":0.1
+                                }
+                            },
+                            "num_layers":4
+                        }
+                    },
+                    "dropout": 0.1
+                }
+            },
+            "graph":{
+                "type":"GLCN",
+                "args":{
+                    "graph_learning":{
+                        "type":"GraphLearningLayer",
+                        "args":{
+                            "in_dim":-1,
+                            "gamma": 1,
+                            "eta": 1,
+                            "n_heads": 4
+                        }
+                    },
+                    "graph_convolution":{
+                        "type":"GCNLayer",
+                        "args":{
+                            "out_dim":-1
+                        }
+                    },
+                    "num_layers": 2
+                }
+            },
+            "decoder":{
+                "type":"Decoder",
+                "args":{
+                    "bilstm":{
+                        "type":"BiLSTMLayer",
+                        "args":{
+                            "input_size": -1,
+                            "hidden_size": 512,
+                            "num_layers": 2,
+                            "dropout": 0.1,
+                            "bidirectional": true,
+                            "batch_first": true
+                        }
+                    },
+                    "mlp":{
+                        "type":"MLPLayer",
+                        "args":{
+                            "in_dim": -1,
+                            "out_dim": -1,
+                            "dropout": 0.1
+                        }
+                    },
+                    "crf":{
+                        "type":"ConditionalRandomField",
+                        "args":{
+                            "num_tags":-1
+                        }
+                    }
+                }
+            }
+        }
+    },
+
+    "train_dataset": {
+        "type": "PICKDataset",
+        "args": {
+            "files_name":"",
+            "boxes_and_transcripts_folder":"boxes_and_transcripts",
+            "images_folder":"images",
+            "entities_folder":"entities",
+            "iob_tagging_type":"box_and_within_box_level",
+            "resized_image_segment_size": [32, 1024],
+            "ignore_error": false
+        }
+    },
+    "validation_dataset": {
+        "type": "PICKDataset",
+        "args": {
+            "files_name":"",
+            "boxes_and_transcripts_folder":"boxes_and_transcripts",
+            "images_folder":"images",
+            "entities_folder":"entities",
+            "iob_tagging_type":"box_and_within_box_level",
+            "resized_image_segment_size": [32, 1024],
+            "ignore_error": false
+        }
+    },
+    "train_data_loader": {
+        "type": "DataLoader",
+        "args":{
+            "batch_size": 2,
+            "shuffle": true,
+            "drop_last": true,
+            "num_workers": 8,
+            "pin_memory":true
+        }
+    },
+    "val_data_loader": {
+          "type": "DataLoader",
+          "args":{
+              "batch_size": 2,
+              "shuffle": false,
+              "drop_last": false,
+              "num_workers": 8,
+              "pin_memory":true
+          }
+      },
+
+    "optimizer": {
+          "type": "Adam",
+          "args":{
+              "lr": 0.0001,
+              "weight_decay": 0,
+              "amsgrad": true
+          }
+    },
+    "lr_scheduler": {
+        "type": "StepLR",
+        "args": {
+            "step_size": 30,
+            "gamma": 0.1
+        }
+    },
+
+    "trainer": {
+        "epochs": 100,
+        "gl_loss_lambda": 0.01,
+        "log_step_interval": 20,
+        "val_step_interval": 100,
+
+        "save_dir": "",
+        "save_period": 20,
+        "log_verbosity": 2,
+
+        "monitor": "max overall-mEF",
+        "monitor_open": true,
+        "early_stop": 40,
+
+        "anomaly_detection": false,
+        "tensorboard": true,
+
+        "sync_batch_norm":true
+    }
+}

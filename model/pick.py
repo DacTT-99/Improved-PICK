@@ -7,10 +7,8 @@ from typing import *
 import torch
 import torch.nn as nn
 import numpy as np
-import encoder
-import graph
-import decoder
-from .decoder import Decoder
+from . import encoder,graph,decoder
+
 from utils.class_utils import keys_vocab_cls, iob_labels_vocab_cls
 
 
@@ -28,14 +26,14 @@ class PICKModel(nn.Module):
         # Given the params of each component, creates components.
 
         embedding_module['args']['num_embeddings'] = len(keys_vocab_cls)
-        self.word_emb = getattr(nn,embedding_module['type'])(embedding_module['args'])
+        self.word_emb = getattr(nn,embedding_module['type'])(**embedding_module['args'])
 
-        encoder_module['args']['transformer']['args']['TransformerEncoderLayer']['args']['d_model'] = embedding_module['embedding_dim']
-        self.encoder = getattr(encoder,encoder_module['type'])(encoder_module['args'])
+        encoder_module['args']['transformer']['args']['transformer_layer']['args']['d_model'] = embedding_module['args']['embedding_dim']
+        self.encoder = getattr(encoder,encoder_module['type'])(**encoder_module['args'])
 
-        graph_module['args']['graph_learning']['args']['in_dim'] = encoder_module['out_dim']
-        graph_module['args']['graph_convolution']['args']['out_dim'] = encoder_module['out_dim']
-        self.graph = getattr(graph,graph_module['type'])(graph_module['args'])
+        graph_module['args']['graph_learning']['args']['in_dim'] = encoder_module['args']['image_encoder']['args']['output_channels']
+        graph_module['args']['graph_convolution']['args']['out_dim'] = encoder_module['args']['image_encoder']['args']['output_channels']
+        self.graph = getattr(graph,graph_module['type'])(**graph_module['args'])
 
         decoder_module['args']['bilstm']['args']['input_size'] = encoder_module['args']['transformer']['args']['TransformerEncoderLayer']['args']['d_model']
         if decoder_module['args']['bilstm']['args']['bidirectional']:
@@ -44,7 +42,7 @@ class PICKModel(nn.Module):
             decoder_module['args']['mlp']['args']['in_dim'] = decoder_module['args']['bilstm_module']['args']['hidden_size']
         decoder_module['args']['mlp']['args']['out_dim'] = len(iob_labels_vocab_cls)
         decoder_module['args']['crf']['args']['num_tags'] = len(iob_labels_vocab_cls)
-        self.decoder = getattr(decoder,decoder_module['type'])(decoder_module['args'])
+        self.decoder = getattr(decoder,decoder_module['type'])(**decoder_module['args'])
 
     def _aggregate_avg_pooling(self, input, text_mask):
         '''

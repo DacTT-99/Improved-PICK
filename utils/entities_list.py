@@ -2,18 +2,20 @@
 # @Author: Wenwen Yu
 # @Created Time: 7/8/2020 9:34 PM
 
-Entities_list = [
-    "company",
-    "address",
-    "date",
-    "total"
-]
-
 # Entities_list = [
+#     "company",
+#     "address",
+#     "date",
 #     "product",
 #     "price",
 #     "total"
 # ]
+
+Entities_list = [
+    "product",
+    "price",
+    "total"
+]
 
 # Entities_list = [
 #     "ticket_num",

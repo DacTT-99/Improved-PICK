@@ -172,7 +172,7 @@ def resnet18(pretrained=False, output_channels=512):
             try:
                 model.load_state_dict({k: v})
             except Exception as e:
-                print("Load layer {} raise error {}".format(k, e))
+                print("Load layer {} raise error".format(k))
     return model
 
 
@@ -191,7 +191,7 @@ def resnet34(pretrained=False, output_channels=512):
             try:
                 model.load_state_dict({k: v})
             except Exception as e:
-                print("Load layer {} raise error {}".format(k, e))
+                print("Load layer {} raise error".format(k))
     return model
 
 
@@ -210,7 +210,7 @@ def resnet50(pretrained=False, output_channels=512):
             try:
                 model.load_state_dict({k: v})
             except Exception as e:
-                print("Load layer {} raise error {}".format(k, e))
+                print("Load layer {} raise error".format(k))
     return model
 
 
@@ -229,7 +229,7 @@ def resnet101(pretrained=False, output_channels=512):
             try:
                 model.load_state_dict({k: v})
             except Exception as e:
-                print("Load layer {} raise error {}".format(k, e))
+                print("Load layer {} raise error".format(k))
     return model
 
 
@@ -248,5 +248,5 @@ def resnet152(pretrained=False, output_channels=512):
             try:
                 model.load_state_dict({k: v})
             except Exception as e:
-                print("Load layer {} raise error {}".format(k, e))
+                print("Load layer {} raise error ".format(k))
     return model

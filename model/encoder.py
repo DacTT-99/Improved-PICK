@@ -185,7 +185,7 @@ class Encoder_v2(nn.Module):
         char_embedding_dim = transformer_layer['args']['d_model']
         out_dim = transformer_layer['args']['d_model']
 
-        transformer_encoder_layer = getattr(nn,transformer_layer['type'])(transformer_layer['args'])
+        transformer_encoder_layer = getattr(nn,transformer_layer['type'])(**transformer_layer['args'])
         self.transformer_encoder = nn.TransformerEncoder(transformer_encoder_layer,num_layers=transformer['args']['num_layers'])
 
         try:
