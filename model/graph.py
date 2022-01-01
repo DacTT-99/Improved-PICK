@@ -203,6 +203,7 @@ class GraphLearningLayer_v2(nn.Module):
         x_j = x_hat.unsqueeze(1).expand(B, N, N, in_dim)
         # (B, N, N, in_dim)
         distance = torch.abs(x_i - x_j)
+        distance = 1 / (distance + 1e-5)
         # add -1 flag to distance, if node is not exist. to separate normal node distances from not exist node distance.
         if box_num is not None:
             # mask = self.compute_static_mask(box_num)

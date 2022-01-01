@@ -266,6 +266,7 @@ class Encoder_v2(nn.Module):
 
         # pooling : (B*N, D, 1, T)
         out = self.pooling(out)
+        out = F.relu(self.bn(out))
         # (B*N, D, T)
         out = out.squeeze()
         # (B*N, T, D)
